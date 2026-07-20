@@ -1,0 +1,51 @@
+Q3 2025 Quarterly Business Review — Acme Corp
+
+Revenue Performance
+Total revenue for Q3 2025 reached $12.4M, representing a 15% year-over-year increase and 8% quarter-over-quarter growth. This exceeds our annual plan target of $11.8M for the quarter.
+
+Key revenue drivers:
+- Enterprise segment: $7.2M (58% of total), up 22% YoY driven by three new Fortune 500 contracts signed in August
+- Mid-market segment: $3.8M (31%), up 11% YoY with improved conversion rates from the new pricing tier introduced in June
+- SMB segment: $1.4M (11%), flat YoY — churn increased to 4.2% monthly (from 3.1% in Q2) due to competitive pressure from LowCost Inc.'s new free tier
+
+Customer Acquisition
+New customer acquisition: 47 new logos in Q3, compared to 39 in Q2 and 42 in Q3 2024.
+Customer acquisition cost (CAC) decreased from $18,500 to $15,200, primarily due to improved organic inbound (+30% website traffic from the thought leadership content series).
+Sales cycle length decreased from 45 days to 38 days on average.
+
+Churn and Retention
+Monthly revenue churn: 2.1% overall (target: <2.5%), but SMB segment trending worse at 4.2%.
+Net revenue retention (NRR): 118%, indicating strong upsell motion in enterprise and mid-market.
+Top churn reasons (SMB): pricing sensitivity (42%), feature gaps in reporting module (28%), onboarding friction (18%).
+Enterprise retention remains strong at 96% annual retention rate.
+
+Product Development
+Shipped features in Q3:
+- Real-time dashboard v2: 3x faster load times, 40% increase in daily active users
+- API v3 with webhook support: adopted by 23% of enterprise customers within first month
+- Mobile app redesign: App Store rating improved from 3.8 to 4.5 stars
+
+In progress:
+- AI-powered anomaly detection (Phase 2, expected Q4 launch)
+- SOC 2 Type II certification (audit in progress, expected completion November 2025)
+
+Market and Competitive Landscape
+The market is consolidating. Two mid-size competitors were acquired in Q3 (DataViz Corp by Salesforce, AnalyticsPro by Microsoft). This creates both opportunity (customer migration windows) and threat (more capable competitors with larger distribution).
+
+LowCost Inc.'s free tier launch in July captured approximately 15% of our SMB pipeline. However, early data shows these free-tier users have very low conversion to paid (2.3% after 90 days), suggesting the threat may be limited to the price-sensitive tail of the market.
+
+Financial Outlook
+Q4 forecast: $13.1M revenue (conservative), $14.2M (optimistic, includes two enterprise deals in late stage).
+Full-year 2025 projection: $48.5M, exceeding the annual plan of $46M by 5.4%.
+Key risk: two large enterprise deals ($1.8M combined) are in negotiation but not yet signed. If they slip to Q1 2026, Q4 will land at the conservative end.
+
+Headcount and Operations
+Current headcount: 127 (target: 135 by year-end).
+Key hiring gaps: 3 senior engineers (backend), 2 enterprise account executives, 1 head of customer success.
+Employee satisfaction score: 4.2/5.0 (Q2: 4.0/5.0). Improvement driven by new remote work policy and equity refresh grants.
+
+Recommendations
+1. Accelerate SMB product differentiation — invest in features that LowCost Inc.'s free tier cannot match (advanced analytics, integrations)
+2. Close the two enterprise deals before quarter-end — consider executive sponsorship and favorable terms
+3. Begin planning for SOC 2 marketing campaign — certification will be a competitive differentiator in enterprise sales
+4. Address SMB churn with improved onboarding flow and proactive customer success outreach
