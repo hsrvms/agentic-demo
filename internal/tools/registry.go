@@ -76,3 +76,20 @@ func (r *registry) Invoke(ctx context.Context, tenantID domain.TenantID, name st
 
 	return tool.Execute(ctx, params)
 }
+
+// Register adds a tool to the registry. For use in tests and setup.
+func (r *registry) Register(name string, tool Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tools[name] = tool
+}
+
+// SetPermission configures whether a tenant can access a tool.
+func (r *registry) SetPermission(tenantID domain.TenantID, toolName string, allowed bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.permissions[string(tenantID)] == nil {
+		r.permissions[string(tenantID)] = make(map[string]bool)
+	}
+	r.permissions[string(tenantID)][toolName] = allowed
+}
