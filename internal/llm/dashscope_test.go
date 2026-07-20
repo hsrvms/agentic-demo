@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/agentic-demo/platform/internal/domain"
@@ -76,8 +77,11 @@ func TestDashScopeProvider_ChatError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 	errStr := err.Error()
-	if errStr[:15] != "API error (stat" {
-		t.Errorf("error should start with 'API error (status 500)': %q", errStr)
+	if !strings.Contains(errStr, "status 500") {
+		t.Errorf("error should contain 'status 500': %q", errStr)
+	}
+	if !strings.Contains(errStr, "internal server error") {
+		t.Errorf("error should contain response body: %q", errStr)
 	}
 }
 
