@@ -15,7 +15,7 @@ DATABASE_URL ?= postgres://$(PGUSER):$(PGPASSWORD)@$(PGHOST):$(PGPORT)/$(PGDATAB
 
 BINARY      := bin/agentic-demo
 CMD_DIR     := ./cmd/cli
-MIGRATE_DIR := internal/db/migrations
+MIGRATE_DIR := sql/migrations
 
 # ── Development ─────────────────────────────────────────────────────
 dev:

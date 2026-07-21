@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentic-demo/platform/internal/db"
 	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
@@ -104,7 +105,7 @@ func setupStore(t *testing.T) (*PgVectorStore, func()) {
 	}
 
 	store := &PgVectorStore{
-		pool:     pool,
+		queries:  db.New(pool),
 		embedder: &stubEmbedder{dim: 1024},
 	}
 
