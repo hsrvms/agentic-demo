@@ -38,8 +38,8 @@ type Provider interface {
 
 // client implements LLMClient with retry and fallback.
 type client struct {
-	primary  Provider
-	fallback Provider // nil = no fallback
+	primary    Provider
+	fallback   Provider // nil = no fallback
 	maxRetries int
 }
 

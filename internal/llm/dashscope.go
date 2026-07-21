@@ -193,23 +193,23 @@ func (e *DashScopeEmbedder) Embed(ctx context.Context, texts []string) ([][]floa
 // --- API types (OpenAI-compatible) ---
 
 type chatRequest struct {
-	Model       string     `json:"model"`
-	Messages    []apiMsg   `json:"messages"`
-	MaxTokens   int        `json:"max_tokens,omitempty"`
-	Temperature float64    `json:"temperature,omitempty"`
-	Tools       []apiTool  `json:"tools,omitempty"`
+	Model       string    `json:"model"`
+	Messages    []apiMsg  `json:"messages"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Temperature float64   `json:"temperature,omitempty"`
+	Tools       []apiTool `json:"tools,omitempty"`
 }
 
 type apiMsg struct {
-	Role       string       `json:"role"`
-	Content    string       `json:"content,omitempty"`
+	Role       string        `json:"role"`
+	Content    string        `json:"content,omitempty"`
 	ToolCalls  []apiToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string       `json:"tool_call_id,omitempty"`
+	ToolCallID string        `json:"tool_call_id,omitempty"`
 }
 
 type apiToolCall struct {
-	ID       string         `json:"id"`
-	Type     string         `json:"type"`
+	ID       string          `json:"id"`
+	Type     string          `json:"type"`
 	Function apiFunctionCall `json:"function"`
 }
 
@@ -219,8 +219,8 @@ type apiFunctionCall struct {
 }
 
 type apiTool struct {
-	Type     string     `json:"type"`
-	Function apiToolFn  `json:"function"`
+	Type     string    `json:"type"`
+	Function apiToolFn `json:"function"`
 }
 
 type apiToolFn struct {
@@ -230,10 +230,10 @@ type apiToolFn struct {
 }
 
 type chatResponse struct {
-	ID      string       `json:"id"`
-	Model   string       `json:"model"`
-	Choices []apiChoice  `json:"choices"`
-	Usage   apiUsage     `json:"usage"`
+	ID      string      `json:"id"`
+	Model   string      `json:"model"`
+	Choices []apiChoice `json:"choices"`
+	Usage   apiUsage    `json:"usage"`
 }
 
 type apiChoice struct {

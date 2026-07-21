@@ -24,10 +24,10 @@ const (
 // All events carry TenantID. Type-specific fields are in the
 // corresponding sub-struct (only one is non-nil).
 type UsageEvent struct {
-	Type     EventType
-	TenantID domain.TenantID
-	LLM      *LLMUsage
-	Tool     *ToolUsage
+	Type      EventType
+	TenantID  domain.TenantID
+	LLM       *LLMUsage
+	Tool      *ToolUsage
 	Embedding *EmbeddingUsage
 }
 

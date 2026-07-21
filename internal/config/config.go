@@ -14,7 +14,7 @@ type Config struct {
 	DatabaseURL string
 	RedisURL    string
 
-	DashScopeAPIKey string
+	DashScopeAPIKey  string
 	DashScopeBaseURL string
 
 	LLMModel       string
@@ -27,12 +27,12 @@ type Config struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		DatabaseURL:     getEnv("DATABASE_URL", "postgres://platform:platform@localhost:5432/platform?sslmode=disable"),
-		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		DashScopeAPIKey: getEnv("DASHSCOPE_API_KEY", ""),
-		DashScopeBaseURL: getEnv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-		LLMModel:        getEnv("LLM_MODEL", "qwen-max"),
-		EmbeddingModel:  getEnv("EMBEDDING_MODEL", "text-embedding-v3"),
+		DatabaseURL:         getEnv("DATABASE_URL", "postgres://platform:platform@localhost:5432/platform?sslmode=disable"),
+		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		DashScopeAPIKey:     getEnv("DASHSCOPE_API_KEY", ""),
+		DashScopeBaseURL:    getEnv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+		LLMModel:            getEnv("LLM_MODEL", "qwen-max"),
+		EmbeddingModel:      getEnv("EMBEDDING_MODEL", "text-embedding-v3"),
 		MaxToolCalls:        getEnvInt("MAX_TOOL_CALLS", 10),
 		MaxLLMCalls:         getEnvInt("MAX_LLM_CALLS", 15),
 		MaxExecutionMinutes: getEnvInt("MAX_EXECUTION_MINUTES", 10),

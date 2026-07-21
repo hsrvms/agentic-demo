@@ -6,6 +6,7 @@ import (
 
 	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/llm"
+	"github.com/agentic-demo/platform/internal/tools"
 	"github.com/agentic-demo/platform/internal/usage"
 )
 
@@ -41,6 +42,10 @@ func (s *scriptedToolRegistry) Invoke(ctx context.Context, tenantID domain.Tenan
 	}
 	return domain.ToolResult{Error: "tool not found"}
 }
+
+func (s *scriptedToolRegistry) Register(name string, tool tools.Tool) {}
+
+func (s *scriptedToolRegistry) SetPermission(tenantID domain.TenantID, toolName string, allowed bool) {}
 
 func newAgentLoop(llmResults []domain.CompletionResult, schemas []domain.ToolSchema, toolResults map[string]domain.ToolResult) *AgentLoop {
 	return &AgentLoop{

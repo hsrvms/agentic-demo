@@ -4,7 +4,12 @@
 // of a cross-cutting type.
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // TenantID identifies a tenant. Always required — a function that
 // doesn't take a TenantID cannot access tenant-scoped data.
@@ -47,15 +52,15 @@ type CompletionResult struct {
 
 // ToolCall represents an LLM-requested tool invocation.
 type ToolCall struct {
-	ID       string
-	Name     string
-	Params   map[string]interface{}
-	IsFinal  bool // true when the LLM has produced its final answer alongside tool calls
+	ID      string
+	Name    string
+	Params  map[string]interface{}
+	IsFinal bool // true when the LLM has produced its final answer alongside tool calls
 }
 
 // Message is a message in an LLM conversation.
 type Message struct {
-	Role       string     // "system", "user", "assistant", "tool"
+	Role       string // "system", "user", "assistant", "tool"
 	Content    string
 	ToolCalls  []ToolCall // populated on assistant messages with tool calls
 	ToolCallID string     // populated on tool result messages
@@ -76,8 +81,8 @@ type ToolResult struct {
 
 // ReportConfig specifies what kind of report to generate.
 type ReportConfig struct {
-	Type        ReportType
-	FocusAreas  []string
+	Type           ReportType
+	FocusAreas     []string
 	DeliveryMethod string // "web", "email"
 }
 
@@ -93,11 +98,11 @@ const (
 
 // Report is a generated strategic report.
 type Report struct {
-	ID        string
-	Content   string
-	Type      ReportType
-	Date      time.Time
-	Metadata  map[string]string
+	ID       string
+	Content  string
+	Type     ReportType
+	Date     time.Time
+	Metadata map[string]string
 }
 
 // IngestionResult summarizes a completed ingestion run.
@@ -105,4 +110,56 @@ type IngestionResult struct {
 	ChunksProcessed int
 	Errors          []string
 	Duration        time.Duration
+}
+
+// --- Auth & Tenancy ---
+
+// User represents a registered platform user.
+type User struct {
+	ID           uuid.UUID
+	Email        string
+	PasswordHash []byte
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// Tenant represents a registered organization on the platform.
+type Tenant struct {
+	ID        TenantID
+	Name      string
+	Status    TenantStatus
+	Settings  json.RawMessage
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// TenantStatus is the lifecycle state of a tenant.
+type TenantStatus string
+
+const (
+	TenantActive    TenantStatus = "active"
+	TenantSuspended TenantStatus = "suspended"
+	TenantDeleted   TenantStatus = "deleted"
+)
+
+// TenantMembership links a user to a tenant with a role.
+type TenantMembership struct {
+	UserID    uuid.UUID
+	TenantID  TenantID
+	Role      Role
+	CreatedAt time.Time
+}
+
+// Role is a user's permission level within a tenant.
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleViewer Role = "viewer"
+)
+
+// AuthClaims is carried in the JWT and extracted by middleware.
+type AuthClaims struct {
+	UserID uuid.UUID
+	Email  string
 }
