@@ -36,7 +36,7 @@ func (r *pgRepository) CreateTenant(ctx context.Context, id, name string) (domai
 	if err != nil {
 		return domain.Tenant{}, fmt.Errorf("create tenant: %w", err)
 	}
-	return toDomainTenant(row), nil
+	return toDomainTenant(&row), nil
 }
 
 func (r *pgRepository) GetTenantByID(ctx context.Context, id domain.TenantID) (domain.Tenant, error) {
@@ -47,7 +47,7 @@ func (r *pgRepository) GetTenantByID(ctx context.Context, id domain.TenantID) (d
 		}
 		return domain.Tenant{}, ErrTenantNotFound
 	}
-	return toDomainTenant(row), nil
+	return toDomainTenant(&row), nil
 }
 
 func (r *pgRepository) ListTenantsByUser(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error) {
@@ -56,8 +56,8 @@ func (r *pgRepository) ListTenantsByUser(ctx context.Context, userID uuid.UUID) 
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
 	tenants := make([]domain.Tenant, len(rows))
-	for i, row := range rows {
-		tenants[i] = toDomainTenant(row)
+	for i := range rows {
+		tenants[i] = toDomainTenant(&rows[i])
 	}
 	return tenants, nil
 }
@@ -71,7 +71,7 @@ func (r *pgRepository) CreateMembership(ctx context.Context, userID uuid.UUID, t
 	if err != nil {
 		return domain.TenantMembership{}, fmt.Errorf("create membership: %w", err)
 	}
-	return toDomainMembership(row), nil
+	return toDomainMembership(&row), nil
 }
 
 func (r *pgRepository) GetMembership(ctx context.Context, userID uuid.UUID, tenantID domain.TenantID) (domain.TenantMembership, error) {
@@ -85,10 +85,10 @@ func (r *pgRepository) GetMembership(ctx context.Context, userID uuid.UUID, tena
 		}
 		return domain.TenantMembership{}, ErrMembershipNotFound
 	}
-	return toDomainMembership(row), nil
+	return toDomainMembership(&row), nil
 }
 
-func toDomainTenant(row db.Tenant) domain.Tenant {
+func toDomainTenant(row *db.Tenant) domain.Tenant {
 	return domain.Tenant{
 		ID:        domain.TenantID(row.ID),
 		Name:      row.Name,
@@ -99,7 +99,7 @@ func toDomainTenant(row db.Tenant) domain.Tenant {
 	}
 }
 
-func toDomainMembership(row db.TenantMembership) domain.TenantMembership {
+func toDomainMembership(row *db.TenantMembership) domain.TenantMembership {
 	return domain.TenantMembership{
 		UserID:    row.UserID,
 		TenantID:  domain.TenantID(row.TenantID),

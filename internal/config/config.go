@@ -23,6 +23,8 @@ type Config struct {
 	MaxToolCalls        int
 	MaxLLMCalls         int
 	MaxExecutionMinutes int
+
+	JWTSecret string
 }
 
 func Load() (*Config, error) {
@@ -36,6 +38,7 @@ func Load() (*Config, error) {
 		MaxToolCalls:        getEnvInt("MAX_TOOL_CALLS", 10),
 		MaxLLMCalls:         getEnvInt("MAX_LLM_CALLS", 15),
 		MaxExecutionMinutes: getEnvInt("MAX_EXECUTION_MINUTES", 10),
+		JWTSecret:           getEnv("JWT_SECRET", "dev-secret-change-in-production"),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -50,9 +53,6 @@ func (c *Config) MaxExecutionDuration() time.Duration {
 
 func (c *Config) validate() error {
 	var missing []string
-	if c.DashScopeAPIKey == "" {
-		missing = append(missing, "DASHSCOPE_API_KEY")
-	}
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}

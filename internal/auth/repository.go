@@ -35,7 +35,7 @@ func (r *pgRepository) CreateUser(ctx context.Context, email string, passwordHas
 	if err != nil {
 		return domain.User{}, fmt.Errorf("create user: %w", err)
 	}
-	return toDomainUser(row), nil
+	return toDomainUser(&row), nil
 }
 
 func (r *pgRepository) GetUserByEmail(ctx context.Context, email string) (domain.User, error) {
@@ -47,7 +47,7 @@ func (r *pgRepository) GetUserByEmail(ctx context.Context, email string) (domain
 		// pgx returns ErrNoRows when not found.
 		return domain.User{}, ErrUserNotFound
 	}
-	return toDomainUser(row), nil
+	return toDomainUser(&row), nil
 }
 
 func (r *pgRepository) GetUserByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
@@ -58,10 +58,10 @@ func (r *pgRepository) GetUserByID(ctx context.Context, id uuid.UUID) (domain.Us
 		}
 		return domain.User{}, ErrUserNotFound
 	}
-	return toDomainUser(row), nil
+	return toDomainUser(&row), nil
 }
 
-func toDomainUser(row db.User) domain.User {
+func toDomainUser(row *db.User) domain.User {
 	return domain.User{
 		ID:           row.ID,
 		Email:        row.Email,

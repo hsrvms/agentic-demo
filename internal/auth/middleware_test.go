@@ -35,8 +35,8 @@ func (m *mockAuthService) ValidateToken(_ context.Context, _ string) (*domain.Au
 
 // mockTenantService implements tenant.TenantService for middleware tests.
 type mockTenantService struct {
-	tenant   domain.Tenant
-	isMember bool
+	tenant    domain.Tenant
+	isMember  bool
 	tenantErr error
 	memberErr error
 }
@@ -70,12 +70,12 @@ func (m *mockTenantService) IsMember(_ context.Context, _ domain.TenantID, _ uui
 // Verify mockTenantService implements the interface.
 var _ tenant.TenantService = (*mockTenantService)(nil)
 
-func newTestEcho(handler echo.HandlerFunc) (*echo.Echo, echo.Context, *httptest.ResponseRecorder) {
+func newTestEcho() (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	return e, c, rec
+	return c, rec
 }
 
 func TestJWTMiddleware_ValidToken(t *testing.T) {
@@ -98,7 +98,7 @@ func TestJWTMiddleware_ValidToken(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, rec := newTestEcho(handler)
+	c, rec := newTestEcho()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -125,7 +125,7 @@ func TestJWTMiddleware_MissingAuthHeader(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 
 	err := handler(c)
 	if err == nil {
@@ -149,7 +149,7 @@ func TestJWTMiddleware_InvalidToken(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 	c.Request().Header.Set("Authorization", "Bearer bad-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -174,7 +174,7 @@ func TestJWTMiddleware_MissingTenantHeader(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 
 	err := handler(c)
@@ -201,7 +201,7 @@ func TestJWTMiddleware_NotMember(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -228,7 +228,7 @@ func TestJWTMiddleware_TenantNotFound(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-nonexistent")
 
@@ -251,7 +251,7 @@ func TestJWTMiddleware_InvalidAuthFormat(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	_, c, _ := newTestEcho(handler)
+	c, _ := newTestEcho()
 	c.Request().Header.Set("Authorization", "NotBearer token")
 
 	err := handler(c)
