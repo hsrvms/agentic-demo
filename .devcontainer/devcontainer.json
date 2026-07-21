@@ -1,0 +1,26 @@
+{
+  "name": "Go web development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "runServices": ["workspace", "postgres", "redis", "minio"],
+  "workspaceFolder": "/workspace",
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "shutdownAction": "stopCompose",
+  "overrideCommand": false,
+  "forwardPorts": [3000, "minio:9000", "minio:9001"],
+  "portsAttributes": {
+    "3000": {
+      "label": "Web application",
+      "onAutoForward": "notify"
+    },
+    "minio:9000": {
+      "label": "MinIO S3 API",
+      "onAutoForward": "silent"
+    },
+    "minio:9001": {
+      "label": "MinIO console",
+      "onAutoForward": "notify"
+    }
+  }
+}
