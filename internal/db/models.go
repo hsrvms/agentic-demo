@@ -7,6 +7,7 @@ package db
 import (
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
@@ -20,4 +21,29 @@ type Chunk struct {
 	Date         time.Time          `json:"date"`
 	Metadata     []byte             `json:"metadata"`
 	CreatedAt    time.Time          `json:"created_at"`
+}
+
+type Tenant struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	Settings  []byte    `json:"settings"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type TenantMembership struct {
+	ID        pgtype.UUID `json:"id"`
+	UserID    pgtype.UUID `json:"user_id"`
+	TenantID  string      `json:"tenant_id"`
+	Role      string      `json:"role"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
+type User struct {
+	ID           pgtype.UUID `json:"id"`
+	Email        string      `json:"email"`
+	PasswordHash []byte      `json:"password_hash"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
