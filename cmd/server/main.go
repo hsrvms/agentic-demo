@@ -4,9 +4,9 @@
 //
 //	POST /api/auth/register   — {email, password} → {user_id, email, token}
 //	POST /api/auth/login      — {email, password} → {token}
-//	GET  /api/auth/me         — (auth) → {user_id, email, tenant_id}
-//	POST /api/tenants         — (auth) → {id, name}
-//	GET  /api/tenants         — (auth) → [{id, name, status}]
+//	GET  /api/auth/me         — (auth + tenant) → {user_id, email, tenant_id}
+//	POST /api/tenants         — (auth only) → {id, name}
+//	GET  /api/tenants         — (auth only) → [{id, name, status}]
 package main
 
 import (
@@ -73,18 +73,24 @@ func main() {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// Public auth routes.
+	// Public auth routes (no auth required).
 	api := e.Group("/api")
 	authGroup := api.Group("/auth")
 	authGroup.POST("/register", registerHandler(authService))
 	authGroup.POST("/login", loginHandler(authService))
 
-	// Protected routes.
+	// Auth-only routes (JWT required, no tenant context needed).
+	// These are used for bootstrapping: creating the first tenant
+	// before any tenant membership exists.
+	authenticated := api.Group("")
+	authenticated.Use(auth.AuthMiddleware(authService))
+	authenticated.POST("/tenants", createTenantHandler(tenantService))
+	authenticated.GET("/tenants", listTenantsHandler(tenantService))
+
+	// Tenant-scoped routes (JWT + X-Tenant-ID required).
 	protected := api.Group("")
 	protected.Use(auth.JWTMiddleware(authService, tenantService))
 	protected.GET("/auth/me", meHandler)
-	protected.POST("/tenants", createTenantHandler(tenantService))
-	protected.GET("/tenants", listTenantsHandler(tenantService))
 
 	// Graceful shutdown.
 	go func() {

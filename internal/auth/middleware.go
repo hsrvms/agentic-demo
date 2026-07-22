@@ -9,18 +9,12 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// JWTMiddleware returns an Echo middleware that authenticates requests.
-//
-// Flow:
-//  1. Extract Bearer token from Authorization header
-//  2. Validate the JWT (signature, expiry)
-//  3. Extract X-Tenant-ID header
-//  4. Verify the user is a member of the requested tenant
-//  5. Set tenant ID and user ID in the request context
-func JWTMiddleware(authService AuthService, tenantService tenant.TenantService) echo.MiddlewareFunc {
+// AuthMiddleware returns Echo middleware that validates the JWT and sets
+// the user ID in the request context. This middleware does NOT check
+// tenant membership — use TenantMiddleware for tenant-scoped routes.
+func AuthMiddleware(authService AuthService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// Extract token.
 			header := c.Request().Header.Get("Authorization")
 			if header == "" {
 				return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")
@@ -30,15 +24,26 @@ func JWTMiddleware(authService AuthService, tenantService tenant.TenantService) 
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid authorization header format")
 			}
-			tokenString := parts[1]
 
-			// Validate token.
-			claims, err := authService.ValidateToken(c.Request().Context(), tokenString)
+			claims, err := authService.ValidateToken(c.Request().Context(), parts[1])
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or expired token")
 			}
 
-			// Extract tenant ID.
+			ctx := SetUserID(c.Request().Context(), claims.UserID)
+			c.SetRequest(c.Request().WithContext(ctx))
+
+			return next(c)
+		}
+	}
+}
+
+// TenantMiddleware returns Echo middleware that verifies the user is a
+// member of the tenant specified in the X-Tenant-ID header. It must be
+// used after AuthMiddleware so that the user ID is already in the context.
+func TenantMiddleware(tenantService tenant.TenantService) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
 			tenantIDStr := c.Request().Header.Get("X-Tenant-ID")
 			if tenantIDStr == "" {
 				return echo.NewHTTPError(http.StatusBadRequest, "missing X-Tenant-ID header")
@@ -46,13 +51,16 @@ func JWTMiddleware(authService AuthService, tenantService tenant.TenantService) 
 			tenantID := domain.TenantID(tenantIDStr)
 
 			// Verify tenant exists.
-			_, err = tenantService.GetByID(c.Request().Context(), tenantID)
+			_, err := tenantService.GetByID(c.Request().Context(), tenantID)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusNotFound, "tenant not found")
 			}
 
+			// Get user ID from context (set by AuthMiddleware).
+			userID := GetUserID(c.Request().Context())
+
 			// Verify membership.
-			isMember, err := tenantService.IsMember(c.Request().Context(), tenantID, claims.UserID)
+			isMember, err := tenantService.IsMember(c.Request().Context(), tenantID, userID)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, "failed to verify membership")
 			}
@@ -60,13 +68,20 @@ func JWTMiddleware(authService AuthService, tenantService tenant.TenantService) 
 				return echo.NewHTTPError(http.StatusForbidden, "user is not a member of this tenant")
 			}
 
-			// Set context values.
-			ctx := c.Request().Context()
-			ctx = SetTenantID(ctx, tenantID)
-			ctx = SetUserID(ctx, claims.UserID)
+			ctx := SetTenantID(c.Request().Context(), tenantID)
 			c.SetRequest(c.Request().WithContext(ctx))
 
 			return next(c)
 		}
+	}
+}
+
+// JWTMiddleware combines AuthMiddleware and TenantMiddleware for
+// convenience on routes that require both auth and tenant scoping.
+func JWTMiddleware(authService AuthService, tenantService tenant.TenantService) echo.MiddlewareFunc {
+	auth := AuthMiddleware(authService)
+	tenantMw := TenantMiddleware(tenantService)
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return auth(tenantMw(next))
 	}
 }

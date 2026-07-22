@@ -98,61 +98,52 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/auth/l
 check "Reject wrong password" "401" "$HTTP_CODE"
 echo
 
-# 7. Access /me without token
+# 7. Auth rejection tests
 echo -e "${YELLOW}--- Auth Rejection ---${NC}"
+
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me")
 check "Reject missing auth token" "401" "$HTTP_CODE"
-echo
 
-# 8. Access /me with invalid token
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
     -H "Authorization: Bearer invalid-token" \
     -H "X-Tenant-ID: t-fake")
 check "Reject invalid token" "401" "$HTTP_CODE"
-echo
 
-# 9. Access /me with valid token but missing X-Tenant-ID
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
     -H "Authorization: Bearer $TOKEN")
 check "Reject missing X-Tenant-ID" "400" "$HTTP_CODE"
-echo
 
-# 10. Access /me with valid token but nonexistent tenant
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
     -H "Authorization: Bearer $TOKEN" \
     -H "X-Tenant-ID: t-nonexistent")
 check "Reject nonexistent tenant" "404" "$HTTP_CODE"
 echo
 
-# 11. Access /me with valid token but user not member of tenant
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
+# 8. Create first tenant (auth-only, no X-Tenant-ID required)
+echo -e "${YELLOW}--- Create First Tenant ---${NC}"
+CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/tenants" \
     -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: t-unknown")
-check "Reject non-member access" "404" "$HTTP_CODE"
+    -H "Content-Type: application/json" \
+    -d '{"name": "Acme Corp"}')
+HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
+BODY=$(echo "$CREATE_RESPONSE" | head -n -1)
+check "Create first tenant" "201" "$HTTP_CODE"
+echo "Response: $BODY"
+
+TENANT_ID=$(echo "$BODY" | jq -r '.id // empty')
+echo "Tenant ID: $TENANT_ID"
 echo
 
-# 12. Create a tenant (need to bypass tenant-scoped auth first)
-# We'll create the tenant via a separate registration flow.
-# Since /api/tenants requires auth with a tenant, we need to seed
-# the first tenant directly or use a bootstrap endpoint.
-#
-# For now, let's insert directly into the DB using psql.
-echo -e "${YELLOW}--- Bootstrap First Tenant ---${NC}"
-TENANT_ID="t-$(cat /proc/sys/kernel/random/uuid | cut -c1-8)"
-PGDATABASE="${PGDATABASE:-app}"
-PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-app}"
-PGPASSWORD="${PGPASSWORD:-app}"
-
-psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE?sslmode=disable" \
-    -c "INSERT INTO tenants (id, name) VALUES ('$TENANT_ID', 'Acme Corp') ON CONFLICT DO NOTHING;" 2>/dev/null || true
-psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE?sslmode=disable" \
-    -c "INSERT INTO tenant_memberships (user_id, tenant_id, role) VALUES ('$USER_ID', '$TENANT_ID', 'admin') ON CONFLICT DO NOTHING;" 2>/dev/null || true
-echo "Created tenant: $TENANT_ID"
+# 9. Reject empty tenant name
+echo -e "${YELLOW}--- Reject Empty Name ---${NC}"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/tenants" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"name": ""}')
+check "Reject empty tenant name" "400" "$HTTP_CODE"
 echo
 
-# 13. Access /me with valid token and valid tenant
+# 10. Access /me with valid token + tenant (tenant-scoped)
 echo -e "${YELLOW}--- Protected Endpoints ---${NC}"
 ME_RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/auth/me" \
     -H "Authorization: Bearer $TOKEN" \
@@ -163,47 +154,61 @@ check "Access /me with valid auth" "200" "$HTTP_CODE"
 echo "Response: $BODY"
 echo
 
-# 14. List tenants
+# 11. List tenants (auth-only)
+echo -e "${YELLOW}--- List Tenants ---${NC}"
 TENANTS_RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/tenants" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: $TENANT_ID")
+    -H "Authorization: Bearer $TOKEN")
 HTTP_CODE=$(echo "$TENANTS_RESPONSE" | tail -1)
 BODY=$(echo "$TENANTS_RESPONSE" | head -n -1)
 check "List tenants" "200" "$HTTP_CODE"
+TENANT_COUNT=$(echo "$BODY" | jq 'length')
+echo "Tenant count: $TENANT_COUNT"
 echo "Response: $BODY"
 echo
 
-# 15. Create another tenant
+# 12. Create a second tenant
+echo -e "${YELLOW}--- Create Second Tenant ---${NC}"
 CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/tenants" \
     -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: $TENANT_ID" \
     -H "Content-Type: application/json" \
     -d '{"name": "Beta Inc"}')
 HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
 BODY=$(echo "$CREATE_RESPONSE" | head -n -1)
-check "Create new tenant" "201" "$HTTP_CODE"
+check "Create second tenant" "201" "$HTTP_CODE"
 echo "Response: $BODY"
 echo
 
-# 16. Create tenant with empty name
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/tenants" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: $TENANT_ID" \
-    -H "Content-Type: application/json" \
-    -d '{"name": ""}')
-check "Reject empty tenant name" "400" "$HTTP_CODE"
-echo
-
-# 17. List tenants again (should have 2+)
+# 13. List tenants again (should have 2)
+echo -e "${YELLOW}--- List After Create ---${NC}"
 TENANTS_RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/tenants" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "X-Tenant-ID: $TENANT_ID")
+    -H "Authorization: Bearer $TOKEN")
 HTTP_CODE=$(echo "$TENANTS_RESPONSE" | tail -1)
 BODY=$(echo "$TENANTS_RESPONSE" | head -n -1)
 check "List tenants after create" "200" "$HTTP_CODE"
 TENANT_COUNT=$(echo "$BODY" | jq 'length')
 echo "Tenant count: $TENANT_COUNT"
 echo "Response: $BODY"
+echo
+
+# 14. Cross-tenant access: user not member of a random tenant
+echo -e "${YELLOW}--- Cross-Tenant Isolation ---${NC}"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "X-Tenant-ID: t-someone-else")
+check "Reject non-member tenant access" "404" "$HTTP_CODE"
+echo
+
+# 15. Register a second user and verify they can't access first user's tenant
+echo -e "${YELLOW}--- Multi-User Isolation ---${NC}"
+REGISTER2_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/register" \
+    -H "Content-Type: application/json" \
+    -d '{"email": "bob@example.com", "password": "securepass123"}')
+TOKEN2=$(echo "$REGISTER2_RESPONSE" | head -n -1 | jq -r '.token // empty')
+
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/me" \
+    -H "Authorization: Bearer $TOKEN2" \
+    -H "X-Tenant-ID: $TENANT_ID")
+check "Reject non-member user access to other tenant" "403" "$HTTP_CODE"
 echo
 
 # Summary

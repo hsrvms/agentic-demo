@@ -53,7 +53,7 @@ func (m *mockTenantService) ListByUser(_ context.Context, _ uuid.UUID) ([]domain
 	return nil, nil
 }
 
-func (m *mockTenantService) GetByID(_ context.Context, tenantID domain.TenantID) (domain.Tenant, error) {
+func (m *mockTenantService) GetByID(_ context.Context, _ domain.TenantID) (domain.Tenant, error) {
 	if m.tenantErr != nil {
 		return domain.Tenant{}, m.tenantErr
 	}
@@ -70,13 +70,221 @@ func (m *mockTenantService) IsMember(_ context.Context, _ domain.TenantID, _ uui
 // Verify mockTenantService implements the interface.
 var _ tenant.TenantService = (*mockTenantService)(nil)
 
-func newTestEcho() (echo.Context, *httptest.ResponseRecorder) {
+func newTestContext() (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	return c, rec
 }
+
+// --- AuthMiddleware tests ---
+
+func TestAuthMiddleware_ValidToken(t *testing.T) {
+	userID := uuid.New()
+	auth := &mockAuthService{
+		claims: &domain.AuthClaims{UserID: userID, Email: "alice@example.com"},
+	}
+
+	middleware := AuthMiddleware(auth)
+	var gotUserID uuid.UUID
+
+	handler := middleware(func(c echo.Context) error {
+		gotUserID = GetUserID(c.Request().Context())
+		return c.String(http.StatusOK, "ok")
+	})
+
+	c, rec := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer valid-token")
+
+	if err := handler(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if gotUserID != userID {
+		t.Errorf("UserID = %v, want %v", gotUserID, userID)
+	}
+}
+
+func TestAuthMiddleware_MissingHeader(t *testing.T) {
+	auth := &mockAuthService{}
+	middleware := AuthMiddleware(auth)
+	handler := middleware(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	c, _ := newTestContext()
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusUnauthorized {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthMiddleware_InvalidToken(t *testing.T) {
+	auth := &mockAuthService{err: ErrInvalidToken}
+	middleware := AuthMiddleware(auth)
+	handler := middleware(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	c, _ := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer bad-token")
+
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusUnauthorized {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthMiddleware_InvalidFormat(t *testing.T) {
+	auth := &mockAuthService{}
+	middleware := AuthMiddleware(auth)
+	handler := middleware(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	c, _ := newTestContext()
+	c.Request().Header.Set("Authorization", "NotBearer token")
+
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusUnauthorized {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- TenantMiddleware tests ---
+
+func TestTenantMiddleware_Valid(t *testing.T) {
+	userID := uuid.New()
+	tenantSvc := &mockTenantService{
+		tenant:   domain.Tenant{ID: "t-abc", Name: "Acme", Status: domain.TenantActive},
+		isMember: true,
+	}
+
+	auth := AuthMiddleware(&mockAuthService{
+		claims: &domain.AuthClaims{UserID: userID, Email: "alice@example.com"},
+	})
+	tenantMw := TenantMiddleware(tenantSvc)
+
+	var gotTenantID domain.TenantID
+	var gotUserID uuid.UUID
+
+	handler := auth(tenantMw(func(c echo.Context) error {
+		gotTenantID = GetTenantID(c.Request().Context())
+		gotUserID = GetUserID(c.Request().Context())
+		return c.String(http.StatusOK, "ok")
+	}))
+
+	c, rec := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer valid-token")
+	c.Request().Header.Set("X-Tenant-ID", "t-abc")
+
+	if err := handler(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if gotTenantID != "t-abc" {
+		t.Errorf("TenantID = %q, want %q", gotTenantID, "t-abc")
+	}
+	if gotUserID != userID {
+		t.Errorf("UserID = %v, want %v", gotUserID, userID)
+	}
+}
+
+func TestTenantMiddleware_MissingHeader(t *testing.T) {
+	tenantSvc := &mockTenantService{}
+	auth := AuthMiddleware(&mockAuthService{
+		claims: &domain.AuthClaims{UserID: uuid.New(), Email: "alice@example.com"},
+	})
+	tenantMw := TenantMiddleware(tenantSvc)
+
+	handler := auth(tenantMw(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	}))
+
+	c, _ := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer valid-token")
+
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusBadRequest {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusBadRequest)
+	}
+}
+
+func TestTenantMiddleware_TenantNotFound(t *testing.T) {
+	tenantSvc := &mockTenantService{tenantErr: tenant.ErrTenantNotFound}
+	auth := AuthMiddleware(&mockAuthService{
+		claims: &domain.AuthClaims{UserID: uuid.New(), Email: "alice@example.com"},
+	})
+	tenantMw := TenantMiddleware(tenantSvc)
+
+	handler := auth(tenantMw(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	}))
+
+	c, _ := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer valid-token")
+	c.Request().Header.Set("X-Tenant-ID", "t-nonexistent")
+
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusNotFound {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusNotFound)
+	}
+}
+
+func TestTenantMiddleware_NotMember(t *testing.T) {
+	tenantSvc := &mockTenantService{
+		tenant:   domain.Tenant{ID: "t-abc", Name: "Acme", Status: domain.TenantActive},
+		isMember: false,
+	}
+	auth := AuthMiddleware(&mockAuthService{
+		claims: &domain.AuthClaims{UserID: uuid.New(), Email: "alice@example.com"},
+	})
+	tenantMw := TenantMiddleware(tenantSvc)
+
+	handler := auth(tenantMw(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	}))
+
+	c, _ := newTestContext()
+	c.Request().Header.Set("Authorization", "Bearer valid-token")
+	c.Request().Header.Set("X-Tenant-ID", "t-abc")
+
+	err := handler(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok {
+		t.Fatalf("expected *echo.HTTPError, got %T", err)
+	}
+	if he.Code != http.StatusForbidden {
+		t.Errorf("code = %d, want %d", he.Code, http.StatusForbidden)
+	}
+}
+
+// --- JWTMiddleware (combined) tests ---
 
 func TestJWTMiddleware_ValidToken(t *testing.T) {
 	userID := uuid.New()
@@ -98,7 +306,7 @@ func TestJWTMiddleware_ValidToken(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	c, rec := newTestEcho()
+	c, rec := newTestContext()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -116,30 +324,6 @@ func TestJWTMiddleware_ValidToken(t *testing.T) {
 	}
 }
 
-func TestJWTMiddleware_MissingAuthHeader(t *testing.T) {
-	auth := &mockAuthService{}
-	tenantSvc := &mockTenantService{}
-
-	middleware := JWTMiddleware(auth, tenantSvc)
-	handler := middleware(func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
-	})
-
-	c, _ := newTestEcho()
-
-	err := handler(c)
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	he, ok := err.(*echo.HTTPError)
-	if !ok {
-		t.Fatalf("expected *echo.HTTPError, got %T", err)
-	}
-	if he.Code != http.StatusUnauthorized {
-		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
-	}
-}
-
 func TestJWTMiddleware_InvalidToken(t *testing.T) {
 	auth := &mockAuthService{err: ErrInvalidToken}
 	tenantSvc := &mockTenantService{}
@@ -149,7 +333,7 @@ func TestJWTMiddleware_InvalidToken(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	c, _ := newTestEcho()
+	c, _ := newTestContext()
 	c.Request().Header.Set("Authorization", "Bearer bad-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -160,30 +344,6 @@ func TestJWTMiddleware_InvalidToken(t *testing.T) {
 	}
 	if he.Code != http.StatusUnauthorized {
 		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
-	}
-}
-
-func TestJWTMiddleware_MissingTenantHeader(t *testing.T) {
-	auth := &mockAuthService{
-		claims: &domain.AuthClaims{UserID: uuid.New(), Email: "alice@example.com"},
-	}
-	tenantSvc := &mockTenantService{}
-
-	middleware := JWTMiddleware(auth, tenantSvc)
-	handler := middleware(func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
-	})
-
-	c, _ := newTestEcho()
-	c.Request().Header.Set("Authorization", "Bearer valid-token")
-
-	err := handler(c)
-	he, ok := err.(*echo.HTTPError)
-	if !ok {
-		t.Fatalf("expected *echo.HTTPError, got %T", err)
-	}
-	if he.Code != http.StatusBadRequest {
-		t.Errorf("code = %d, want %d", he.Code, http.StatusBadRequest)
 	}
 }
 
@@ -201,7 +361,7 @@ func TestJWTMiddleware_NotMember(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	c, _ := newTestEcho()
+	c, _ := newTestContext()
 	c.Request().Header.Set("Authorization", "Bearer valid-token")
 	c.Request().Header.Set("X-Tenant-ID", "t-abc")
 
@@ -212,54 +372,5 @@ func TestJWTMiddleware_NotMember(t *testing.T) {
 	}
 	if he.Code != http.StatusForbidden {
 		t.Errorf("code = %d, want %d", he.Code, http.StatusForbidden)
-	}
-}
-
-func TestJWTMiddleware_TenantNotFound(t *testing.T) {
-	auth := &mockAuthService{
-		claims: &domain.AuthClaims{UserID: uuid.New(), Email: "alice@example.com"},
-	}
-	tenantSvc := &mockTenantService{
-		tenantErr: tenant.ErrTenantNotFound,
-	}
-
-	middleware := JWTMiddleware(auth, tenantSvc)
-	handler := middleware(func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
-	})
-
-	c, _ := newTestEcho()
-	c.Request().Header.Set("Authorization", "Bearer valid-token")
-	c.Request().Header.Set("X-Tenant-ID", "t-nonexistent")
-
-	err := handler(c)
-	he, ok := err.(*echo.HTTPError)
-	if !ok {
-		t.Fatalf("expected *echo.HTTPError, got %T", err)
-	}
-	if he.Code != http.StatusNotFound {
-		t.Errorf("code = %d, want %d", he.Code, http.StatusNotFound)
-	}
-}
-
-func TestJWTMiddleware_InvalidAuthFormat(t *testing.T) {
-	auth := &mockAuthService{}
-	tenantSvc := &mockTenantService{}
-
-	middleware := JWTMiddleware(auth, tenantSvc)
-	handler := middleware(func(c echo.Context) error {
-		return c.String(http.StatusOK, "ok")
-	})
-
-	c, _ := newTestEcho()
-	c.Request().Header.Set("Authorization", "NotBearer token")
-
-	err := handler(c)
-	he, ok := err.(*echo.HTTPError)
-	if !ok {
-		t.Fatalf("expected *echo.HTTPError, got %T", err)
-	}
-	if he.Code != http.StatusUnauthorized {
-		t.Errorf("code = %d, want %d", he.Code, http.StatusUnauthorized)
 	}
 }
