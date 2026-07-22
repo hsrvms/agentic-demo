@@ -10,6 +10,8 @@ services:
         USER_GID: ${DEV_GID:-1000}
     init: true
     command: sleep infinity
+    ports:
+      - "3000:3000"
     environment:
       DATABASE_URL: postgres://app:app@postgres:5432/app?sslmode=disable
       PGDATABASE: app
@@ -45,6 +47,8 @@ services:
   postgres:
     image: pgvector/pgvector:0.8.5-pg18-bookworm
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: app
@@ -61,6 +65,8 @@ services:
   redis:
     image: redis:8.8.0-alpine3.23
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -73,6 +79,9 @@ services:
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     command: server /data --console-address :9001
     environment:
       MINIO_ROOT_USER: minioadmin
