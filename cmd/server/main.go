@@ -82,15 +82,14 @@ func main() {
 	// Auth-only routes (JWT required, no tenant context needed).
 	// These are used for bootstrapping: creating the first tenant
 	// before any tenant membership exists.
-	authenticated := api.Group("")
-	authenticated.Use(auth.AuthMiddleware(authService))
-	authenticated.POST("/tenants", createTenantHandler(tenantService))
-	authenticated.GET("/tenants", listTenantsHandler(tenantService))
+	// Per-route middleware avoids group prefix conflicts.
+	authMw := auth.AuthMiddleware(authService)
+	api.POST("/tenants", createTenantHandler(tenantService), authMw)
+	api.GET("/tenants", listTenantsHandler(tenantService), authMw)
 
 	// Tenant-scoped routes (JWT + X-Tenant-ID required).
-	protected := api.Group("")
-	protected.Use(auth.JWTMiddleware(authService, tenantService))
-	protected.GET("/auth/me", meHandler)
+	tenantMw := auth.JWTMiddleware(authService, tenantService)
+	api.GET("/auth/me", meHandler, tenantMw)
 
 	// Graceful shutdown.
 	go func() {
