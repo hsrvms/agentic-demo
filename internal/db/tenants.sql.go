@@ -8,7 +8,7 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
 const createTenant = `-- name: CreateTenant :one
@@ -66,7 +66,7 @@ WHERE tm.user_id = $1
 ORDER BY t.created_at DESC
 `
 
-func (q *Queries) ListTenantsByUser(ctx context.Context, userID pgtype.UUID) ([]Tenant, error) {
+func (q *Queries) ListTenantsByUser(ctx context.Context, userID uuid.UUID) ([]Tenant, error) {
 	rows, err := q.db.Query(ctx, listTenantsByUser, userID)
 	if err != nil {
 		return nil, err

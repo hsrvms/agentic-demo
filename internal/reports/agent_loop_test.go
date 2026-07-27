@@ -45,7 +45,8 @@ func (s *scriptedToolRegistry) Invoke(ctx context.Context, tenantID domain.Tenan
 
 func (s *scriptedToolRegistry) Register(name string, tool tools.Tool) {}
 
-func (s *scriptedToolRegistry) SetPermission(tenantID domain.TenantID, toolName string, allowed bool) {}
+func (s *scriptedToolRegistry) SetPermission(tenantID domain.TenantID, toolName string, allowed bool) {
+}
 
 func newAgentLoop(llmResults []domain.CompletionResult, schemas []domain.ToolSchema, toolResults map[string]domain.ToolResult) *AgentLoop {
 	return &AgentLoop{

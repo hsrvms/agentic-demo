@@ -7,7 +7,7 @@ package db
 import (
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
@@ -33,17 +33,17 @@ type Tenant struct {
 }
 
 type TenantMembership struct {
-	ID        pgtype.UUID `json:"id"`
-	UserID    pgtype.UUID `json:"user_id"`
-	TenantID  string      `json:"tenant_id"`
-	Role      string      `json:"role"`
-	CreatedAt time.Time   `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	TenantID  string    `json:"tenant_id"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type User struct {
-	ID           pgtype.UUID `json:"id"`
-	Email        string      `json:"email"`
-	PasswordHash []byte      `json:"password_hash"`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
+	ID           uuid.UUID `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash []byte    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }

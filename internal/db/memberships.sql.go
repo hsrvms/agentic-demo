@@ -8,7 +8,7 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
 const createMembership = `-- name: CreateMembership :one
@@ -19,9 +19,9 @@ RETURNING id, user_id, tenant_id, role, created_at
 `
 
 type CreateMembershipParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	TenantID string      `json:"tenant_id"`
-	Role     string      `json:"role"`
+	UserID   uuid.UUID `json:"user_id"`
+	TenantID string    `json:"tenant_id"`
+	Role     string    `json:"role"`
 }
 
 // Membership queries for the tenant module.
@@ -44,8 +44,8 @@ WHERE user_id = $1 AND tenant_id = $2
 `
 
 type DeleteMembershipParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	TenantID string      `json:"tenant_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	TenantID string    `json:"tenant_id"`
 }
 
 func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipParams) error {
@@ -60,8 +60,8 @@ WHERE user_id = $1 AND tenant_id = $2
 `
 
 type GetMembershipParams struct {
-	UserID   pgtype.UUID `json:"user_id"`
-	TenantID string      `json:"tenant_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	TenantID string    `json:"tenant_id"`
 }
 
 func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (TenantMembership, error) {
@@ -117,7 +117,7 @@ WHERE user_id = $1
 ORDER BY created_at ASC
 `
 
-func (q *Queries) ListMembershipsByUser(ctx context.Context, userID pgtype.UUID) ([]TenantMembership, error) {
+func (q *Queries) ListMembershipsByUser(ctx context.Context, userID uuid.UUID) ([]TenantMembership, error) {
 	rows, err := q.db.Query(ctx, listMembershipsByUser, userID)
 	if err != nil {
 		return nil, err
