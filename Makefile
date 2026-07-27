@@ -1,4 +1,5 @@
-.PHONY: dev build run test test-cover test-short lint lint-fix generate tidy vet clean \
+.PHONY: dev dev-server dev-cli build build-server build-cli build-all run run-server run-cli \
+        test test-cover test-short lint lint-fix generate tidy vet clean \
         migrate-up db-ping db-psql db-reset
 
 # ── Configuration ───────────────────────────────────────────────────
@@ -13,24 +14,38 @@ PGDATABASE ?= platform
 
 DATABASE_URL ?= postgres://$(PGUSER):$(PGPASSWORD)@$(PGHOST):$(PGPORT)/$(PGDATABASE)?sslmode=disable
 
-BINARY      := bin/agentic-demo
-CMD_DIR     := ./cmd/cli
+BIN_DIR     := tmp
+SERVER_BIN  := $(BIN_DIR)/server
+CLI_BIN     := $(BIN_DIR)/cli
 MIGRATE_DIR := sql/migrations
 
-# ── Development ─────────────────────────────────────────────────────
-dev:
-	air
+# ── Development (live reload) ───────────────────────────────────────
+dev: dev-server
+
+dev-server:
+	air --build.cmd "go build -o $(SERVER_BIN) ./cmd/server" --build.bin "$(SERVER_BIN)"
+
+dev-cli:
+	air --build.cmd "go build -o $(CLI_BIN) ./cmd/cli" --build.bin "$(CLI_BIN)"
 
 # ── Build ───────────────────────────────────────────────────────────
-build:
-	go build -o $(BINARY) $(CMD_DIR)
+build: build-server build-cli
+
+build-server:
+	go build -o $(SERVER_BIN) ./cmd/server
+
+build-cli:
+	go build -o $(CLI_BIN) ./cmd/cli
 
 build-all:
 	go build ./...
 
 # ── Run ─────────────────────────────────────────────────────────────
-run:
-	go run $(CMD_DIR)
+run-server: build-server
+	$(SERVER_BIN)
+
+run-cli: build-cli
+	$(CLI_BIN) $(ARGS)
 
 # ── Test ────────────────────────────────────────────────────────────
 test:
@@ -86,4 +101,4 @@ db-reset:
 
 # ── Clean ───────────────────────────────────────────────────────────
 clean:
-	rm -rf bin/ coverage.out coverage.html
+	rm -rf $(BIN_DIR)/ coverage.out coverage.html
