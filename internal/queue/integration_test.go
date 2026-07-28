@@ -94,8 +94,8 @@ func TestIntegration_IngestionJob(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for ingestion job processing")
 		case <-ticker.C:
-			if conn.called {
-				if ks.storeCalls < 1 {
+			if conn.called.Load() {
+				if ks.storeCalls.Load() < 1 {
 					t.Fatal("expected at least 1 Store call")
 				}
 				return // success
@@ -158,7 +158,7 @@ func TestIntegration_ReportJob(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for report job processing")
 		case <-ticker.C:
-			if mockLLM.called && ks.queryCalls > 0 {
+			if mockLLM.called.Load() && ks.queryCalls.Load() > 0 {
 				return // success
 			}
 		}

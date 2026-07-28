@@ -88,7 +88,7 @@ func TestWorkerServer_StartStop(t *testing.T) {
 			srv.Stop()
 			t.Fatal("timed out waiting for task processing")
 		case <-ticker.C:
-			if conn.called {
+			if conn.called.Load() {
 				srv.Stop()
 				return // success
 			}

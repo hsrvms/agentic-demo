@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
-	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/ingestion"
@@ -21,22 +21,17 @@ import (
 // --- Mock dependencies ---
 
 type mockKnowledgeStore struct {
-	mu         sync.Mutex
-	storeCalls int
-	queryCalls int
+	storeCalls atomic.Int32
+	queryCalls atomic.Int32
 }
 
 func (m *mockKnowledgeStore) Store(_ context.Context, _ domain.TenantID, _ []domain.Chunk) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.storeCalls++
+	m.storeCalls.Add(1)
 	return nil
 }
 
 func (m *mockKnowledgeStore) Query(_ context.Context, _ domain.TenantID, _ string, _ int, _ knowledge.QueryFilters) ([]domain.RankedChunk, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.queryCalls++
+	m.queryCalls.Add(1)
 	return []domain.RankedChunk{
 		{Chunk: domain.Chunk{ID: "c1", Content: "test context"}},
 	}, nil
@@ -51,11 +46,11 @@ func (m *mockKnowledgeStore) GetStats(_ context.Context, _ domain.TenantID) (map
 }
 
 type mockConnector struct {
-	called bool
+	called atomic.Bool
 }
 
 func (m *mockConnector) Extract(_ context.Context) ([]domain.RawDocument, error) {
-	m.called = true
+	m.called.Store(true)
 	return []domain.RawDocument{{Content: "test document", Metadata: map[string]string{"source": "test"}}}, nil
 }
 
@@ -72,11 +67,11 @@ func (m *mockEmbedder) Embed(_ context.Context, texts []string) ([][]float32, er
 func (m *mockEmbedder) Dimension() int { return 3 }
 
 type mockLLMClient struct {
-	called bool
+	called atomic.Bool
 }
 
 func (m *mockLLMClient) Complete(_ context.Context, _ []domain.Message, _ llm.Options) (domain.CompletionResult, error) {
-	m.called = true
+	m.called.Store(true)
 	return domain.CompletionResult{
 		Text:        "Report content",
 		InputTokens: 10,
@@ -109,11 +104,11 @@ func TestIngestHandler_ProcessTask(t *testing.T) {
 		t.Fatalf("ProcessTask: %v", err)
 	}
 
-	if !conn.called {
+	if !conn.called.Load() {
 		t.Fatal("expected connector.Extract to be called")
 	}
-	if ks.storeCalls != 1 {
-		t.Fatalf("expected 1 Store call, got %d", ks.storeCalls)
+	if ks.storeCalls.Load() != 1 {
+		t.Fatalf("expected 1 Store call, got %d", ks.storeCalls.Load())
 	}
 }
 
@@ -157,11 +152,11 @@ func TestReportHandler_ProcessTask(t *testing.T) {
 		t.Fatalf("ProcessTask: %v", err)
 	}
 
-	if !mockLLM.called {
+	if !mockLLM.called.Load() {
 		t.Fatal("expected LLM client to be called")
 	}
-	if ks.queryCalls != 1 {
-		t.Fatalf("expected 1 Query call, got %d", ks.queryCalls)
+	if ks.queryCalls.Load() != 1 {
+		t.Fatalf("expected 1 Query call, got %d", ks.queryCalls.Load())
 	}
 }
 
@@ -241,7 +236,7 @@ func TestRegisterHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mux.ProcessTask: %v", err)
 	}
-	if !conn.called {
+	if !conn.called.Load() {
 		t.Fatal("expected connector to be called via mux")
 	}
 }
