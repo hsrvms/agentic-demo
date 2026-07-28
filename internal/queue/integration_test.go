@@ -225,19 +225,24 @@ func TestIntegration_DeadLetter(t *testing.T) {
 				time.Sleep(200 * time.Millisecond)
 				mr.FastForward(1 * time.Second)
 
-				inspector := asynq.NewInspector(asynq.RedisClientOpt{Addr: mr.Addr()})
-				defer inspector.Close()
-
-				archived, err := inspector.ListArchivedTasks("test", asynq.PageSize(10))
-				if err != nil {
-					t.Fatalf("list archived tasks: %v", err)
-				}
-				if len(archived) < 1 {
-					t.Fatalf("expected at least 1 archived task, got %d", len(archived))
-				}
+				verifyArchived(t, mr.Addr())
 				return // success
 			}
 		}
+	}
+}
+
+func verifyArchived(t *testing.T, redisAddr string) {
+	t.Helper()
+	inspector := asynq.NewInspector(asynq.RedisClientOpt{Addr: redisAddr})
+	defer inspector.Close()
+
+	archived, err := inspector.ListArchivedTasks("test", asynq.PageSize(10))
+	if err != nil {
+		t.Fatalf("list archived tasks: %v", err)
+	}
+	if len(archived) < 1 {
+		t.Fatalf("expected at least 1 archived task, got %d", len(archived))
 	}
 }
 

@@ -19,7 +19,7 @@ import (
 	"github.com/hibiken/asynq"
 )
 
-func testHandlerDeps(t *testing.T) (HandlerDeps, *mockConnector, *mockKnowledgeStore) {
+func testHandlerDeps(t *testing.T) (HandlerDeps, *mockConnector) {
 	t.Helper()
 	conn := &mockConnector{}
 	ks := &mockKnowledgeStore{}
@@ -41,7 +41,7 @@ func testHandlerDeps(t *testing.T) (HandlerDeps, *mockConnector, *mockKnowledgeS
 			5, 5, 5*time.Minute,
 		),
 		Logger: slog.Default(),
-	}, conn, ks
+	}, conn
 }
 
 func TestWorkerServer_StartStop(t *testing.T) {
@@ -51,7 +51,7 @@ func TestWorkerServer_StartStop(t *testing.T) {
 	}
 	defer mr.Close()
 
-	deps, conn, _ := testHandlerDeps(t)
+	deps, conn := testHandlerDeps(t)
 	cfg := ServerConfig{
 		RedisAddr:   mr.Addr(),
 		Concurrency: 1,
@@ -155,7 +155,7 @@ func TestWorkerServer_GracefulShutdown(t *testing.T) {
 }
 
 func TestNewWorkerServer_DefaultQueues(t *testing.T) {
-	deps, _, _ := testHandlerDeps(t)
+	deps, _ := testHandlerDeps(t)
 	cfg := ServerConfig{
 		RedisAddr:   "localhost:6379",
 		Concurrency: 5,

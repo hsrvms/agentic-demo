@@ -7,7 +7,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -28,22 +28,30 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	if err := run(logger); err != nil {
+		logger.Error("fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(logger *slog.Logger) error {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config error: %v", err)
+		return fmt.Errorf("config: %w", err)
 	}
 
 	ctx := context.Background()
 
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("database error: %v", err)
+		return fmt.Errorf("database: %w", err)
 	}
-	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("database ping failed: %v", err)
+		pool.Close()
+		return fmt.Errorf("database ping: %w", err)
 	}
+	defer pool.Close()
 
 	// Build embedder.
 	embedder := llm.NewDashScopeNativeEmbedder(
@@ -103,7 +111,7 @@ func main() {
 	srv := queue.NewWorkerServer(serverCfg, deps)
 
 	if err := srv.Start(); err != nil {
-		log.Fatalf("worker server start: %v", err)
+		return fmt.Errorf("worker server start: %w", err)
 	}
 
 	logger.Info("worker started",
@@ -119,4 +127,5 @@ func main() {
 	logger.Info("received signal, shutting down", "signal", sig)
 	srv.Stop()
 	logger.Info("worker stopped")
+	return nil
 }
