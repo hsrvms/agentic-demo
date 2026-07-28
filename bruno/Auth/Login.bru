@@ -1,0 +1,32 @@
+meta {
+  name: Login
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/auth/login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "alice@example.com",
+    "password": "securepass123"
+  }
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  bru.setVar("token", body.token);
+  console.log("New token:", body.token?.substring(0, 50) + "...");
+}

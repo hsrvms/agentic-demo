@@ -1,0 +1,22 @@
+meta {
+  name: Reject Nonexistent Tenant
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/api/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: t-nonexistent
+}
+
+script:post-response {
+  test("Status code is 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

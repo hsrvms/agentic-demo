@@ -1,0 +1,22 @@
+meta {
+  name: Multi-User Isolation Assert
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/api/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token2}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 403", function () {
+    expect(res.getStatus()).to.equal(403);
+  });
+}

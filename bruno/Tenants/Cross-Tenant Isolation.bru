@@ -1,0 +1,22 @@
+meta {
+  name: Cross-Tenant Isolation
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/api/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: t-someone-else
+}
+
+script:post-response {
+  test("Status code is 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+}

@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Agentic Demo - Auth + RLS",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
