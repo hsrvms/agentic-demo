@@ -1,0 +1,11 @@
+{
+  "name": "Go web development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "runServices": ["workspace", "postgres", "redis", "minio"],
+  "workspaceFolder": "/workspace",
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "shutdownAction": "stopCompose",
+  "overrideCommand": false
+}

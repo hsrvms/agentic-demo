@@ -18,6 +18,8 @@ import (
 type ToolRegistry interface {
 	ListTools(ctx context.Context, tenantID domain.TenantID) []domain.ToolSchema
 	Invoke(ctx context.Context, tenantID domain.TenantID, name string, params map[string]interface{}) domain.ToolResult
+	Register(name string, tool Tool)
+	SetPermission(tenantID domain.TenantID, toolName string, allowed bool)
 }
 
 // Tool is an internal seam — a single tool implementation.

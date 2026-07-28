@@ -9,10 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/agentic-demo/platform/internal/db"
 	"github.com/agentic-demo/platform/internal/domain"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pgvector/pgvector-go"
 )
@@ -34,7 +35,7 @@ type QueryFilters struct {
 
 // PgVectorStore implements KnowledgeStore backed by Postgres + pgvector.
 type PgVectorStore struct {
-	pool     *pgxpool.Pool
+	queries  *db.Queries
 	embedder Embedder
 }
 
@@ -46,22 +47,7 @@ type Embedder interface {
 }
 
 func NewPgVectorStore(pool *pgxpool.Pool, embedder Embedder) *PgVectorStore {
-	return &PgVectorStore{pool: pool, embedder: embedder}
-}
-
-// vecToString converts a float32 slice to a pgvector-compatible string: "[1,2,3]".
-// This is the text format Postgres accepts with the ::vector cast.
-func vecToString(v []float32) string {
-	return pgvector.NewVector(v).String()
-}
-
-// parseVecString parses a pgvector text representation back to float32.
-func parseVecString(s string) ([]float32, error) {
-	var v pgvector.Vector
-	if err := v.Parse(s); err != nil {
-		return nil, err
-	}
-	return v.Slice(), nil
+	return &PgVectorStore{queries: db.New(pool), embedder: embedder}
 }
 
 func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, chunks []domain.Chunk) error {
@@ -85,25 +71,22 @@ func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, chu
 		chunks[i].Embedding = embeddings[i]
 	}
 
-	// Batch insert. Each chunk is inserted with the vector as a text parameter
-	// cast to ::vector — Postgres handles the implicit text→vector conversion.
 	for _, chunk := range chunks {
 		metadataJSON, err := json.Marshal(chunk.Metadata)
 		if err != nil {
 			return fmt.Errorf("marshal metadata for chunk %s: %w", chunk.ID, err)
 		}
 
-		_, err = s.pool.Exec(ctx, `
-			INSERT INTO chunks (id, tenant_id, content, embedding, source, document_type, date, metadata)
-			VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8::jsonb)
-			ON CONFLICT (id) DO UPDATE SET
-				content = EXCLUDED.content,
-				embedding = EXCLUDED.embedding,
-				metadata = EXCLUDED.metadata,
-				date = EXCLUDED.date`,
-			chunk.ID, string(tenantID), chunk.Content, vecToString(chunk.Embedding),
-			chunk.Source, chunk.DocumentType, chunk.Date, string(metadataJSON),
-		)
+		err = s.queries.InsertChunk(ctx, db.InsertChunkParams{
+			ID:           chunk.ID,
+			TenantID:     string(tenantID),
+			Content:      chunk.Content,
+			Embedding:    pgvector.NewVector(chunk.Embedding),
+			Source:       chunk.Source,
+			DocumentType: chunk.DocumentType,
+			Date:         chunk.Date,
+			Metadata:     metadataJSON,
+		})
 		if err != nil {
 			return fmt.Errorf("store chunk %s: %w", chunk.ID, err)
 		}
@@ -119,67 +102,50 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
-	queryVec := vecToString(embeddings[0])
-
-	// Build dynamic WHERE clause.
-	where := []string{"c.tenant_id = $2"}
-	args := []interface{}{queryVec, string(tenantID), topK}
-	argIdx := 4 // $1, $2, $3 already used
+	params := db.QueryChunksParams{
+		TenantID:  string(tenantID),
+		Embedding: pgvector.NewVector(embeddings[0]),
+		Limit:     int32(topK),
+	}
 
 	if filters.Source != "" {
-		where = append(where, fmt.Sprintf("c.source = $%d", argIdx))
-		args = append(args, filters.Source)
-		argIdx++
+		params.Source = pgtype.Text{String: filters.Source, Valid: true}
 	}
 	if !filters.DateFrom.IsZero() {
-		where = append(where, fmt.Sprintf("c.date >= $%d", argIdx))
-		args = append(args, filters.DateFrom)
-		argIdx++
+		params.DateFrom = pgtype.Timestamptz{Time: filters.DateFrom, Valid: true}
 	}
 	if !filters.DateTo.IsZero() {
-		where = append(where, fmt.Sprintf("c.date <= $%d", argIdx))
-		args = append(args, filters.DateTo)
-		argIdx++
+		params.DateTo = pgtype.Timestamptz{Time: filters.DateTo, Valid: true}
 	}
 
-	query := fmt.Sprintf(`
-		SELECT c.id, c.content, c.source, c.document_type, c.date, c.metadata::text,
-		       (c.embedding <=> $1::vector) AS distance
-		FROM chunks c
-		WHERE %s
-		ORDER BY c.embedding <=> $1::vector
-		LIMIT $3`, strings.Join(where, " AND "))
-
-	rows, err := s.pool.Query(ctx, query, args...)
+	rows, err := s.queries.QueryChunks(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("similarity query: %w", err)
 	}
-	defer rows.Close()
 
-	var results []domain.RankedChunk
-	for rows.Next() {
-		var rc domain.RankedChunk
-		var metadataJSON string
-		var date time.Time
+	results := make([]domain.RankedChunk, 0, len(rows))
+	for _, row := range rows {
+		var metadata map[string]string
+		_ = json.Unmarshal(row.Metadata, &metadata)
 
-		err := rows.Scan(
-			&rc.Chunk.ID, &rc.Chunk.Content, &rc.Chunk.Source,
-			&rc.Chunk.DocumentType, &date, &metadataJSON, &rc.Distance,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan result: %w", err)
-		}
-
-		rc.Chunk.Date = date
-		_ = json.Unmarshal([]byte(metadataJSON), &rc.Chunk.Metadata)
-		results = append(results, rc)
+		results = append(results, domain.RankedChunk{
+			Chunk: domain.Chunk{
+				ID:           row.ID,
+				Content:      row.Content,
+				Source:       row.Source,
+				DocumentType: row.DocumentType,
+				Date:         row.Date,
+				Metadata:     metadata,
+			},
+			Distance: row.Distance,
+		})
 	}
 
-	return results, rows.Err()
+	return results, nil
 }
 
 func (s *PgVectorStore) DeleteTenantData(ctx context.Context, tenantID domain.TenantID) error {
-	_, err := s.pool.Exec(ctx, "DELETE FROM chunks WHERE tenant_id = $1", string(tenantID))
+	err := s.queries.DeleteTenantChunks(ctx, string(tenantID))
 	if err != nil {
 		return fmt.Errorf("delete tenant data: %w", err)
 	}
@@ -187,24 +153,14 @@ func (s *PgVectorStore) DeleteTenantData(ctx context.Context, tenantID domain.Te
 }
 
 func (s *PgVectorStore) GetStats(ctx context.Context, tenantID domain.TenantID) (map[string]int, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT source, COUNT(*) as chunk_count
-		FROM chunks
-		WHERE tenant_id = $1
-		GROUP BY source`, string(tenantID))
+	rows, err := s.queries.GetChunkStats(ctx, string(tenantID))
 	if err != nil {
 		return nil, fmt.Errorf("get stats: %w", err)
 	}
-	defer rows.Close()
 
-	stats := make(map[string]int)
-	for rows.Next() {
-		var source string
-		var count int
-		if err := rows.Scan(&source, &count); err != nil {
-			return nil, fmt.Errorf("scan stat: %w", err)
-		}
-		stats[source] = count
+	stats := make(map[string]int, len(rows))
+	for _, row := range rows {
+		stats[row.Source] = int(row.ChunkCount)
 	}
-	return stats, rows.Err()
+	return stats, nil
 }

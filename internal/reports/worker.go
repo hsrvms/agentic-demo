@@ -20,10 +20,10 @@ import (
 
 // ReportWorker generates strategic reports.
 type ReportWorker struct {
-	knowledge   knowledge.KnowledgeStore
-	llmClient   llm.LLMClient
-	tools       tools.ToolRegistry
-	emitter     usage.UsageEmitter
+	knowledge    knowledge.KnowledgeStore
+	llmClient    llm.LLMClient
+	tools        tools.ToolRegistry
+	emitter      usage.UsageEmitter
 	maxToolCalls int
 	maxLLMCalls  int
 	maxDuration  time.Duration

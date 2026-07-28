@@ -20,9 +20,10 @@ type AgentResult struct {
 // AgentLoop executes the bounded LLM reasoning loop.
 //
 // Protocol:
-//   Phase 1: Context gathering (done by caller, passed in)
-//   Phase 2: LLM reasoning loop with optional tool calls
-//   Phase 3: Synthesis — final report generation
+//
+//	Phase 1: Context gathering (done by caller, passed in)
+//	Phase 2: LLM reasoning loop with optional tool calls
+//	Phase 3: Synthesis — final report generation
 //
 // Termination conditions (any one):
 //   - LLM returns text-only response (no tool calls)
