@@ -10,6 +10,81 @@ import (
 	"github.com/hibiken/asynq"
 )
 
+func startMiniredis(t *testing.T) *miniredis.Miniredis {
+	t.Helper()
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	return mr
+}
+
+func TestAsynqQueue_Enqueue(t *testing.T) {
+	mr := startMiniredis(t)
+
+	q, err := NewAsynqQueue(mr.Addr())
+	if err != nil {
+		t.Fatalf("NewAsynqQueue: %v", err)
+	}
+	defer q.Close()
+
+	result, err := q.Enqueue(context.Background(), Job{
+		Type:    TypeIngestionManual,
+		Queue:   QueueIngestion,
+		Payload: IngestionPayload{TenantID: "t1", SourceID: "crm"},
+	})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	if result.ID == "" {
+		t.Fatal("expected non-empty job ID")
+	}
+	if result.Queue != QueueIngestion {
+		t.Fatalf("expected queue %q, got %q", QueueIngestion, result.Queue)
+	}
+}
+
+func TestAsynqQueue_EnqueueAt(t *testing.T) {
+	mr := startMiniredis(t)
+
+	q, err := NewAsynqQueue(mr.Addr())
+	if err != nil {
+		t.Fatalf("NewAsynqQueue: %v", err)
+	}
+	defer q.Close()
+
+	processAt := time.Now().Add(1 * time.Hour)
+	result, err := q.EnqueueAt(context.Background(), Job{
+		Type:    TypeReportDaily,
+		Queue:   QueueReport,
+		Payload: ReportPayload{TenantID: "t1", ReportType: "daily"},
+	}, processAt)
+	if err != nil {
+		t.Fatalf("EnqueueAt: %v", err)
+	}
+	if result.ID == "" {
+		t.Fatal("expected non-empty job ID")
+	}
+}
+
+func TestAsynqQueue_Close(t *testing.T) {
+	mr := startMiniredis(t)
+
+	q, err := NewAsynqQueue(mr.Addr())
+	if err != nil {
+		t.Fatalf("NewAsynqQueue: %v", err)
+	}
+
+	// Close should be idempotent — calling twice must not panic or error.
+	if err := q.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := q.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}
+
 // TestAsynqMiniredis_EnqueueAndProcess verifies that asynq works with miniredis:
 // a task enqueued via the client is processed by the server handler.
 func TestAsynqMiniredis_EnqueueAndProcess(t *testing.T) {
