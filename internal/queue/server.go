@@ -40,8 +40,14 @@ func NewWorkerServer(cfg ServerConfig, deps HandlerDeps) *WorkerServer {
 		concurrency = 10
 	}
 
+	redisOpt, err := parseRedisAddr(cfg.RedisAddr)
+	if err != nil {
+		// Fall back to plain address; Start() will surface the error.
+		redisOpt = asynq.RedisClientOpt{Addr: cfg.RedisAddr}
+	}
+
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: cfg.RedisAddr},
+		redisOpt,
 		asynq.Config{
 			Concurrency: concurrency,
 			Queues:      queues,

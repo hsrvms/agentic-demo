@@ -85,6 +85,29 @@ func TestAsynqQueue_Close(t *testing.T) {
 	}
 }
 
+func TestParseRedisAddr_HostPort(t *testing.T) {
+	opt, err := parseRedisAddr("localhost:6379")
+	if err != nil {
+		t.Fatalf("parseRedisAddr: %v", err)
+	}
+	if opt.Addr != "localhost:6379" {
+		t.Fatalf("expected Addr 'localhost:6379', got %q", opt.Addr)
+	}
+}
+
+func TestParseRedisAddr_URL(t *testing.T) {
+	opt, err := parseRedisAddr("redis://localhost:6379/2")
+	if err != nil {
+		t.Fatalf("parseRedisAddr: %v", err)
+	}
+	if opt.Addr != "localhost:6379" {
+		t.Fatalf("expected Addr 'localhost:6379', got %q", opt.Addr)
+	}
+	if opt.DB != 2 {
+		t.Fatalf("expected DB 2, got %d", opt.DB)
+	}
+}
+
 // TestAsynqMiniredis_EnqueueAndProcess verifies that asynq works with miniredis:
 // a task enqueued via the client is processed by the server handler.
 func TestAsynqMiniredis_EnqueueAndProcess(t *testing.T) {
