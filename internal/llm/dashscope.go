@@ -117,6 +117,9 @@ func (p *DashScopeProvider) Chat(ctx context.Context, msgs []domain.Message, opt
 
 // Embed generates embeddings via DashScope's OpenAI-compatible endpoint.
 // This implements the knowledge.Embedder interface.
+// Prefer DashScopeNativeEmbedder for the public DashScope API — this
+// OpenAI-compatible embedder only works with MaaS workspaces that have
+// embedding models enabled.
 type DashScopeEmbedder struct {
 	apiKey  string
 	baseURL string
@@ -261,6 +264,135 @@ type embeddingResponse struct {
 type embeddingData struct {
 	Embedding []float32 `json:"embedding"`
 	Index     int       `json:"index"`
+}
+
+// --- Native DashScope Embedding API (non-OpenAI-compatible) ---
+//
+// The public DashScope API uses a different format from the OpenAI-compatible
+// endpoint.  See https://docs.qwencloud.com/api-reference/text-embedding/dashscope-embedding
+//
+//   POST /api/v1/services/embeddings/text-embedding/text-embedding
+//   {
+//     "model": "text-embedding-v4",
+//     "input": { "texts": ["..."] },
+//     "parameters": { "text_type": "document", "dimension": 1024 }
+//   }
+
+// DashScopeNativeEmbedder implements knowledge.Embedder using the native
+// (non-OpenAI-compatible) DashScope embedding API.
+type DashScopeNativeEmbedder struct {
+	apiKey  string
+	baseURL string
+	model   string
+	dim     int
+	http    *http.Client
+}
+
+// NewDashScopeNativeEmbedder creates an embedder for the public DashScope API.
+// baseURL should be https://dashscope-intl.aliyuncs.com/api/v1
+func NewDashScopeNativeEmbedder(apiKey, baseURL, model string) *DashScopeNativeEmbedder {
+	dim := 1024
+	return &DashScopeNativeEmbedder{
+		apiKey:  apiKey,
+		baseURL: baseURL,
+		model:   model,
+		dim:     dim,
+		http:    &http.Client{Timeout: 30 * time.Second},
+	}
+}
+
+func (e *DashScopeNativeEmbedder) Dimension() int { return e.dim }
+
+func (e *DashScopeNativeEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	reqBody := nativeEmbeddingRequest{
+		Model: e.model,
+		Input: nativeEmbeddingInput{Texts: texts},
+		Parameters: nativeEmbeddingParams{
+			TextType:  "document",
+			Dimension: e.dim,
+		},
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal embedding request: %w", err)
+	}
+
+	url := e.baseURL + "/services/embeddings/text-embedding/text-embedding"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create embedding request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+e.apiKey)
+
+	resp, err := e.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("embedding http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read embedding response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("embedding API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var embResp nativeEmbeddingResponse
+	if err := json.Unmarshal(respBody, &embResp); err != nil {
+		return nil, fmt.Errorf("unmarshal embedding response: %w", err)
+	}
+
+	// The API only returns status_code/code/message on errors.
+	// On success, these fields are absent and we check for embeddings.
+	if embResp.Code != "" {
+		return nil, fmt.Errorf("embedding API error: %s (code: %s)", embResp.Message, embResp.Code)
+	}
+
+	if len(embResp.Output.Embeddings) == 0 {
+		return nil, fmt.Errorf("empty embedding response")
+	}
+
+	results := make([][]float32, len(embResp.Output.Embeddings))
+	for i, item := range embResp.Output.Embeddings {
+		results[i] = item.Embedding
+	}
+	return results, nil
+}
+
+type nativeEmbeddingRequest struct {
+	Model      string                 `json:"model"`
+	Input      nativeEmbeddingInput   `json:"input"`
+	Parameters nativeEmbeddingParams  `json:"parameters"`
+}
+
+type nativeEmbeddingInput struct {
+	Texts []string `json:"texts"`
+}
+
+type nativeEmbeddingParams struct {
+	TextType  string `json:"text_type"`
+	Dimension int    `json:"dimension"`
+}
+
+type nativeEmbeddingResponse struct {
+	StatusCode int                        `json:"status_code"`
+	RequestID  string                     `json:"request_id"`
+	Code       string                     `json:"code"`
+	Message    string                     `json:"message"`
+	Output     nativeEmbeddingOutput      `json:"output"`
+}
+
+type nativeEmbeddingOutput struct {
+	Embeddings []nativeEmbeddingData `json:"embeddings"`
+}
+
+type nativeEmbeddingData struct {
+	Embedding  []float32 `json:"embedding"`
+	TextIndex  int       `json:"text_index"`
 }
 
 // --- Conversion helpers ---
