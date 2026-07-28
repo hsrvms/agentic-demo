@@ -2,10 +2,18 @@
         test test-cover test-short lint lint-fix generate tidy vet clean \
         migrate-up db-ping db-psql db-reset
 
+# ── Environment ────────────────────────────────────────────────────
+# Source .env into every recipe's shell, but never override variables
+# already set in the environment (e.g. by docker-compose in devcontainer).
+define ENV
+set -a; [ -f .env ] && while IFS= read -r l; do \
+	case "$$l" in \#*|"") continue;; esac; \
+	eval "$$l"; \
+done < .env; set +a;
+endef
+
 # ── Configuration ───────────────────────────────────────────────────
-# In the devcontainer, PGHOST=postgres is set automatically via remoteEnv
-# and DATABASE_URL is provided by docker-compose.  Locally, either set
-# DATABASE_URL directly or override the PG* variables below.
+# These are fallbacks when no .env or environment variable is present.
 PGHOST     ?= localhost
 PGPORT     ?= 5432
 PGUSER     ?= platform
@@ -23,10 +31,10 @@ MIGRATE_DIR := sql/migrations
 dev: dev-server
 
 dev-server:
-	air --build.cmd "go build -o $(SERVER_BIN) ./cmd/server" --build.bin "$(SERVER_BIN)"
+	$(ENV) air --build.cmd "go build -o $(SERVER_BIN) ./cmd/server" --build.bin "$(SERVER_BIN)"
 
 dev-cli:
-	air --build.cmd "go build -o $(CLI_BIN) ./cmd/cli" --build.bin "$(CLI_BIN)"
+	$(ENV) air --build.cmd "go build -o $(CLI_BIN) ./cmd/cli" --build.bin "$(CLI_BIN)"
 
 # ── Build ───────────────────────────────────────────────────────────
 build: build-server build-cli
@@ -42,10 +50,10 @@ build-all:
 
 # ── Run ─────────────────────────────────────────────────────────────
 run-server: build-server
-	$(SERVER_BIN)
+	$(ENV) $(SERVER_BIN)
 
 run-cli: build-cli
-	$(CLI_BIN) $(ARGS)
+	$(ENV) $(CLI_BIN) $(ARGS)
 
 # ── Test ────────────────────────────────────────────────────────────
 test:
@@ -82,21 +90,21 @@ vet:
 
 # ── Database Migrations ─────────────────────────────────────────────
 migrate-up:
-	@for f in $$(ls $(MIGRATE_DIR)/*.sql 2>/dev/null | sort); do \
+	$(ENV) for f in $$(ls $(MIGRATE_DIR)/*.sql 2>/dev/null | sort); do \
 		echo "▶ $$(basename $$f)"; \
-		psql "$$DATABASE_URL" -f "$$f" || exit 1; \
+		psql "$${DATABASE_URL:-$(DATABASE_URL)}" -f "$$f" || exit 1; \
 	done
 
 db-ping:
-	pg_isready -h $(PGHOST) -p $(PGPORT) -U $(PGUSER) -d $(PGDATABASE)
+	$(ENV) pg_isready -h "$${PGHOST:-$(PGHOST)}" -p "$${PGPORT:-$(PGPORT)}" -U "$${PGUSER:-$(PGUSER)}" -d "$${PGDATABASE:-$(PGDATABASE)}"
 
 db-psql:
-	psql "$(DATABASE_URL)"
+	$(ENV) psql "$${DATABASE_URL:-$(DATABASE_URL)}"
 
 db-reset:
 	@echo "This will drop and recreate the public schema."
 	@read -p "Continue? [y/N] " ans && [ "$$ans" = "y" ] || exit 0
-	psql "$(DATABASE_URL)" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	$(ENV) psql "$${DATABASE_URL:-$(DATABASE_URL)}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	$(MAKE) migrate-up
 
 # ── Clean ───────────────────────────────────────────────────────────

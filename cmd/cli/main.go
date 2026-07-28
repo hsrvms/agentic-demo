@@ -55,7 +55,7 @@ func main() {
 
 	// Build the object graph.
 	emitter := usage.NoOpEmitter{}
-	embedder := llm.NewDashScopeEmbedder(cfg.DashScopeAPIKey, cfg.DashScopeBaseURL, cfg.EmbeddingModel)
+	embedder := llm.NewDashScopeNativeEmbedder(cfg.DashScopeEmbeddingAPIKey, cfg.DashScopeEmbeddingBaseURL, cfg.EmbeddingModel)
 	ks := knowledge.NewPgVectorStore(pool, embedder)
 
 	llmClient := llm.NewClient(
