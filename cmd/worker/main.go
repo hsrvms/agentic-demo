@@ -82,10 +82,14 @@ func main() {
 		cfg.MaxExecutionDuration(),
 	)
 
+	// Build rate limiter.
+	rateLimiter := queue.NewRedisRateLimiter(cfg.RedisURL, cfg.MaxActiveJobsPerTenant)
+
 	// Build handler deps and start worker server.
 	deps := queue.HandlerDeps{
 		IngestWorker: ingestWorker,
 		ReportWorker: reportWorker,
+		RateLimiter:  rateLimiter,
 		Logger:       logger,
 	}
 

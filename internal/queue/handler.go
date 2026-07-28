@@ -16,13 +16,14 @@ import (
 type HandlerDeps struct {
 	IngestWorker *ingestion.IngestWorker
 	ReportWorker *reports.ReportWorker
+	RateLimiter  TenantRateLimiter
 	Logger       *slog.Logger
 }
 
 // RegisterHandlers registers all task handlers on the given mux.
 func RegisterHandlers(mux *asynq.ServeMux, deps HandlerDeps) {
-	ingest := &IngestHandler{worker: deps.IngestWorker}
-	report := &ReportHandler{worker: deps.ReportWorker}
+	ingest := &IngestHandler{worker: deps.IngestWorker, rateLimiter: deps.RateLimiter}
+	report := &ReportHandler{worker: deps.ReportWorker, rateLimiter: deps.RateLimiter}
 	delivery := &DeliveryHandler{logger: deps.Logger}
 
 	mux.Handle(TypeIngestionScheduled, ingest)
@@ -37,13 +38,21 @@ func RegisterHandlers(mux *asynq.ServeMux, deps HandlerDeps) {
 
 // IngestHandler processes ingestion tasks by delegating to IngestWorker.
 type IngestHandler struct {
-	worker *ingestion.IngestWorker
+	worker      *ingestion.IngestWorker
+	rateLimiter TenantRateLimiter
 }
 
 func (h *IngestHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
 	var payload IngestionPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("unmarshal ingestion payload: %w", err)
+	}
+
+	if h.rateLimiter != nil {
+		if err := h.rateLimiter.Acquire(ctx, payload.TenantID); err != nil {
+			return err
+		}
+		defer h.rateLimiter.Release(ctx, payload.TenantID)
 	}
 
 	_, err := h.worker.Ingest(ctx, domain.TenantID(payload.TenantID), payload.SourceID)
@@ -55,13 +64,21 @@ func (h *IngestHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 
 // ReportHandler processes report tasks by delegating to ReportWorker.
 type ReportHandler struct {
-	worker *reports.ReportWorker
+	worker      *reports.ReportWorker
+	rateLimiter TenantRateLimiter
 }
 
 func (h *ReportHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
 	var payload ReportPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("unmarshal report payload: %w", err)
+	}
+
+	if h.rateLimiter != nil {
+		if err := h.rateLimiter.Acquire(ctx, payload.TenantID); err != nil {
+			return err
+		}
+		defer h.rateLimiter.Release(ctx, payload.TenantID)
 	}
 
 	config := domain.ReportConfig{
