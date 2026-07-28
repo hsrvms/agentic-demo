@@ -31,6 +31,14 @@ type Config struct {
 	MaxExecutionMinutes int
 
 	JWTSecret string
+
+	// Queue configuration.
+	QueueConcurrency       int
+	QueueMaxRetry          int
+	QueueIngestionWeight   int
+	QueueReportWeight      int
+	QueueDeliveryWeight    int
+	MaxActiveJobsPerTenant int
 }
 
 func Load() (*Config, error) {
@@ -47,6 +55,12 @@ func Load() (*Config, error) {
 		MaxLLMCalls:              getEnvInt("MAX_LLM_CALLS", 15),
 		MaxExecutionMinutes:      getEnvInt("MAX_EXECUTION_MINUTES", 10),
 		JWTSecret:                getEnv("JWT_SECRET", "dev-secret-change-in-production"),
+		QueueConcurrency:         getEnvInt("QUEUE_CONCURRENCY", 10),
+		QueueMaxRetry:            getEnvInt("QUEUE_MAX_RETRY", 3),
+		QueueIngestionWeight:     getEnvInt("QUEUE_INGESTION_WEIGHT", 3),
+		QueueReportWeight:        getEnvInt("QUEUE_REPORT_WEIGHT", 2),
+		QueueDeliveryWeight:      getEnvInt("QUEUE_DELIVERY_WEIGHT", 1),
+		MaxActiveJobsPerTenant:   getEnvInt("MAX_ACTIVE_JOBS_PER_TENANT", 3),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -57,6 +71,15 @@ func Load() (*Config, error) {
 
 func (c *Config) MaxExecutionDuration() time.Duration {
 	return time.Duration(c.MaxExecutionMinutes) * time.Minute
+}
+
+// QueueWeights returns the queue weight map for asynq server configuration.
+func (c *Config) QueueWeights() map[string]int {
+	return map[string]int{
+		"ingestion": c.QueueIngestionWeight,
+		"report":    c.QueueReportWeight,
+		"delivery":  c.QueueDeliveryWeight,
+	}
 }
 
 func (c *Config) validate() error {
