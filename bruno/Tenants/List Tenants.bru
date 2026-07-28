@@ -1,0 +1,25 @@
+meta {
+  name: List Tenants
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/tenants
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  console.log("Tenant count:", body.length);
+  console.log("Response:", JSON.stringify(body));
+}

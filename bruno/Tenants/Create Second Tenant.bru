@@ -1,0 +1,30 @@
+meta {
+  name: Create Second Tenant
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/tenants
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Beta Inc"
+  }
+}
+
+script:post-response {
+  test("Status code is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  console.log("Response:", JSON.stringify(res.getBody()));
+}

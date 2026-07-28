@@ -1,0 +1,22 @@
+meta {
+  name: Reject Invalid Token
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/api/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer invalid-token
+  X-Tenant-ID: t-fake
+}
+
+script:post-response {
+  test("Status code is 401", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}

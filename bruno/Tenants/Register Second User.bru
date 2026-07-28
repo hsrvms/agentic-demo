@@ -1,0 +1,28 @@
+meta {
+  name: Register Second User
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/api/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "bob@example.com",
+    "password": "securepass123"
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  bru.setVar("token2", body.token);
+  console.log("Bob's token:", body.token?.substring(0, 50) + "...");
+}
