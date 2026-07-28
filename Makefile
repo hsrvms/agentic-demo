@@ -1,4 +1,4 @@
-.PHONY: dev dev-server dev-cli build build-server build-cli build-all run run-server run-cli \
+.PHONY: dev dev-server dev-worker build build-server build-worker build-all run run-server run-worker \
         test test-cover test-short lint lint-fix generate tidy vet clean \
         migrate-up db-ping db-psql db-reset
 
@@ -22,10 +22,10 @@ PGDATABASE ?= platform
 
 DATABASE_URL ?= postgres://$(PGUSER):$(PGPASSWORD)@$(PGHOST):$(PGPORT)/$(PGDATABASE)?sslmode=disable
 
-BIN_DIR     := tmp
-SERVER_BIN  := $(BIN_DIR)/server
-CLI_BIN     := $(BIN_DIR)/cli
-MIGRATE_DIR := sql/migrations
+BIN_DIR      := tmp
+SERVER_BIN   := $(BIN_DIR)/server
+WORKER_BIN   := $(BIN_DIR)/worker
+MIGRATE_DIR  := sql/migrations
 
 # ── Development (live reload) ───────────────────────────────────────
 dev: dev-server
@@ -33,17 +33,17 @@ dev: dev-server
 dev-server:
 	$(ENV) air --build.cmd "go build -o $(SERVER_BIN) ./cmd/server" --build.bin "$(SERVER_BIN)"
 
-dev-cli:
-	$(ENV) air --build.cmd "go build -o $(CLI_BIN) ./cmd/cli" --build.bin "$(CLI_BIN)"
+dev-worker:
+	$(ENV) air --build.cmd "go build -o $(WORKER_BIN) ./cmd/worker" --build.bin "$(WORKER_BIN)"
 
 # ── Build ───────────────────────────────────────────────────────────
-build: build-server build-cli
+build: build-server build-worker
 
 build-server:
 	go build -o $(SERVER_BIN) ./cmd/server
 
-build-cli:
-	go build -o $(CLI_BIN) ./cmd/cli
+build-worker:
+	go build -o $(WORKER_BIN) ./cmd/worker
 
 build-all:
 	go build ./...
@@ -52,8 +52,8 @@ build-all:
 run-server: build-server
 	$(ENV) $(SERVER_BIN)
 
-run-cli: build-cli
-	$(ENV) $(CLI_BIN) $(ARGS)
+run-worker: build-worker
+	$(ENV) $(WORKER_BIN)
 
 # ── Test ────────────────────────────────────────────────────────────
 test:

@@ -31,6 +31,16 @@ services:
         target: /home/dev/.pi
         bind:
           create_host_path: false
+      - type: bind
+        source: ${HOME}/.ssh
+        target: /home/dev/.ssh
+        read_only: true
+      - type: bind
+        source: ${HOME}/.config/gh
+        target: /home/dev/.config/gh
+        read_only: true
+        bind:
+          create_host_path: false
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/go/build-cache
       - npm-cache:/home/dev/.npm

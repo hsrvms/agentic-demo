@@ -19,6 +19,7 @@ Copy this directory to a repository root. Usually only the Compose project name,
 - Linux with Docker Engine, Compose v2, and BuildKit/buildx
 - Zed **or** Node.js plus the Dev Container CLI
 - Existing Pi configuration at `~/.pi`
+- (Optional) GitHub CLI authenticated on the host for `gh` inside the container
 
 Install the CLI on the host if needed:
 
@@ -100,6 +101,9 @@ mc ready local
 
 test -d "$HOME/.pi" && test "$(findmnt -n -o FSTYPE "$HOME/.pi")" = none
 pi --version
+
+gh --version
+gh auth status
 ```
 
 The `findmnt` filesystem type for a Docker bind mount is commonly `none`; if the host/runtime reports a different type, inspect it with `findmnt "$HOME/.pi"` instead. The important property is that `$HOME/.pi` is the host bind mount, not container-managed state.
@@ -172,7 +176,8 @@ The service credentials are development-only defaults, not production secrets. T
 2. **Seed a MinIO bucket** — add a one-shot `minio-init` service using the pinned `minio/mc` image. Application migrations or explicit scripts are usually clearer than hidden startup mutation.
 3. **Publish database/cache ports** — add a developer-local Compose override with `127.0.0.1:5432:5432` and `127.0.0.1:6379:6379` when host-native tools require access.
 4. **Read-only Pi config** — mount `~/.pi` read-only only if session/config writes are not needed. This is safer but can break expected Pi behavior.
-5. **SSH/Git credential forwarding** — prefer agent/socket forwarding supported by your client; never bake keys or tokens into this image. Client portability differs, so it is not enabled here.
-6. **Digest pinning and dependency automation** — pin all image tags to digests for maximum byte-for-byte reproducibility, then use Renovate/Dependabot to keep them patched. Tags are easier for a copyable template.
-7. **Multi-architecture prebuilt workspace image** — publish the final image to a registry to make onboarding faster for teams. Local builds are simpler and avoid a supply-chain/publishing workflow by default.
-8. **Frontend package lockfile** — if a project needs npm dependencies beyond the global Tailwind CLI, keep `package.json` and its lockfile in the project and use a project-specific named `node_modules` volume.
+5. **GitHub CLI** — `gh` is installed via the official GitHub APT repo. Authentication uses the host's `~/.config/gh` (bind-mounted read-only). Run `gh auth login` on the host once; the token is stored in `~/.config/gh/hosts.yml` and picked up automatically inside the container. If you prefer a per-project token, set `GH_TOKEN` or `GITHUB_TOKEN` in the workspace environment instead.
+6. **SSH/Git credential forwarding** — prefer agent/socket forwarding supported by your client; never bake keys or tokens into this image. Client portability differs, so it is not enabled here.
+7. **Digest pinning and dependency automation** — pin all image tags to digests for maximum byte-for-byte reproducibility, then use Renovate/Dependabot to keep them patched. Tags are easier for a copyable template.
+8. **Multi-architecture prebuilt workspace image** — publish the final image to a registry to make onboarding faster for teams. Local builds are simpler and avoid a supply-chain/publishing workflow by default.
+9. **Frontend package lockfile** — if a project needs npm dependencies beyond the global Tailwind CLI, keep `package.json` and its lockfile in the project and use a project-specific named `node_modules` volume.
