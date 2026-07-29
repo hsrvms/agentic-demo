@@ -31,7 +31,7 @@ script:post-response {
 
   const body = res.getBody();
   test("Error message mentions invalid type", function () {
-    expect(body.error).to.match(/type/i);
+    expect(body.message).to.match(/type/i);
   });
 
   console.log("Validation error:", JSON.stringify(body));

@@ -31,7 +31,7 @@ script:post-response {
 
   const body = res.getBody();
   test("Error message mentions invalid cron", function () {
-    expect(body.error).to.match(/cron/i);
+    expect(body.message).to.match(/cron/i);
   });
 
   console.log("Validation error:", JSON.stringify(body));
