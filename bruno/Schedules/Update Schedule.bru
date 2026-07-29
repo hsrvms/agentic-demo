@@ -1,0 +1,41 @@
+meta {
+  name: Update Schedule
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{base_url}}/api/schedules/{{daily_schedule_id}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  X-Tenant-ID: {{tenant_id}}
+}
+
+body:json {
+  {
+    "type": "daily",
+    "cron_expr": "0 7 * * *",
+    "focus": "updated: morning brief with competitor analysis",
+    "format": "detailed"
+  }
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Updated fields are reflected", function () {
+    expect(body.cron_expr).to.equal("0 7 * * *");
+    expect(body.focus).to.equal("updated: morning brief with competitor analysis");
+    expect(body.format).to.equal("detailed");
+  });
+
+  console.log("Updated schedule:", JSON.stringify(body));
+}

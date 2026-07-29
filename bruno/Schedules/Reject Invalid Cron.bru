@@ -1,0 +1,38 @@
+meta {
+  name: Reject Invalid Cron
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/api/schedules
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  X-Tenant-ID: {{tenant_id}}
+}
+
+body:json {
+  {
+    "type": "daily",
+    "cron_expr": "not-a-valid-cron",
+    "focus": "should fail"
+  }
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  const body = res.getBody();
+  test("Error message mentions invalid cron", function () {
+    expect(body.message).to.match(/cron/i);
+  });
+
+  console.log("Validation error:", JSON.stringify(body));
+}

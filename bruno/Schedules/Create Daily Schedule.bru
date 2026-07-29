@@ -1,0 +1,47 @@
+meta {
+  name: Create Daily Schedule
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/schedules
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  X-Tenant-ID: {{tenant_id}}
+}
+
+body:json {
+  {
+    "type": "daily",
+    "cron_expr": "0 9 * * *",
+    "focus": "sales trends and customer churn",
+    "format": "standard"
+  }
+}
+
+script:post-response {
+  test("Status code is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  const body = res.getBody();
+  test("Response has required fields", function () {
+    expect(body.id).to.not.be.undefined;
+    expect(body.type).to.equal("daily");
+    expect(body.cron_expr).to.equal("0 9 * * *");
+    expect(body.enabled).to.equal(true);
+    expect(body.focus).to.equal("sales trends and customer churn");
+    expect(body.format).to.equal("standard");
+    expect(body.tenant_id).to.equal(bru.getVar("tenant_id"));
+  });
+
+  bru.setVar("daily_schedule_id", body.id);
+  console.log("Daily schedule ID:", body.id);
+  console.log("Response:", JSON.stringify(body));
+}

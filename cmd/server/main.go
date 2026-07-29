@@ -20,6 +20,7 @@ import (
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -52,6 +53,9 @@ func main() {
 
 	tenantRepo := tenant.NewRepository(queries)
 	tenantService := tenant.NewService(tenantRepo)
+
+	scheduleRepo := scheduling.NewRepository(queries)
+	scheduleService := scheduling.NewService(scheduleRepo)
 
 	// Echo setup.
 	e := echo.New()
@@ -90,6 +94,10 @@ func main() {
 	// Tenant-scoped routes (JWT + X-Tenant-ID required).
 	tenantMw := auth.JWTMiddleware(authService, tenantService)
 	api.GET("/auth/me", meHandler, tenantMw)
+
+	// Schedule routes (tenant-scoped).
+	scheduleHandler := scheduling.NewHandler(scheduleService)
+	scheduleHandler.Register(api, tenantMw)
 
 	// Graceful shutdown.
 	go func() {

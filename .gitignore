@@ -19,3 +19,4 @@ vendor/
 # PIV loop artifacts
 .piv/
 tmp/
+worker

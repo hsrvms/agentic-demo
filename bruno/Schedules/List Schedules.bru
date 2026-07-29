@@ -1,0 +1,35 @@
+meta {
+  name: List Schedules
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/schedules
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Returns at least 2 schedules", function () {
+    expect(body.length).to.be.at.least(2);
+  });
+
+  console.log("Schedule count:", body.length);
+  console.log("Response:", JSON.stringify(body.map(s => ({
+    id: s.id,
+    type: s.type,
+    enabled: s.enabled,
+    cron_expr: s.cron_expr
+  }))));
+}

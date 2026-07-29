@@ -1,0 +1,33 @@
+meta {
+  name: Toggle Schedule
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/schedules/{{weekly_schedule_id}}/toggle
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Schedule is now disabled", function () {
+    expect(body.enabled).to.equal(false);
+  });
+  test("ID and type are unchanged", function () {
+    expect(body.id).to.equal(bru.getVar("weekly_schedule_id"));
+    expect(body.type).to.equal("weekly");
+  });
+
+  console.log("Toggled schedule:", JSON.stringify(body));
+}
