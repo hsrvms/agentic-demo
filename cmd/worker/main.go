@@ -20,8 +20,10 @@ import (
 	"github.com/agentic-demo/platform/internal/llm"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
+	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/tools"
 	"github.com/agentic-demo/platform/internal/usage"
+	"github.com/hibiken/asynq"
 )
 
 func main() {
@@ -52,6 +54,8 @@ func run(logger *slog.Logger) error {
 		return fmt.Errorf("database ping: %w", err)
 	}
 	defer pool.Close()
+
+	queries := db.New(pool)
 
 	// Build embedder.
 	embedder := llm.NewDashScopeNativeEmbedder(
@@ -93,6 +97,10 @@ func run(logger *slog.Logger) error {
 	// Build rate limiter.
 	rateLimiter := queue.NewRedisRateLimiter(cfg.RedisURL, cfg.MaxActiveJobsPerTenant)
 
+	// Build scheduling service.
+	scheduleRepo := scheduling.NewRepository(queries)
+	scheduleService := scheduling.NewService(scheduleRepo)
+
 	// Build handler deps and start worker server.
 	deps := queue.HandlerDeps{
 		IngestWorker: ingestWorker,
@@ -119,13 +127,103 @@ func run(logger *slog.Logger) error {
 		"queues", cfg.QueueWeights(),
 	)
 
+	// Start the scheduler for periodic report generation.
+	scheduler, err := startScheduler(logger, cfg.RedisURL, scheduleService)
+	if err != nil {
+		srv.Stop()
+		return fmt.Errorf("scheduler start: %w", err)
+	}
+
 	// Wait for shutdown signal.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 
 	logger.Info("received signal, shutting down", "signal", sig)
+	scheduler.Shutdown()
+	logger.Info("scheduler stopped")
 	srv.Stop()
 	logger.Info("worker stopped")
 	return nil
+}
+
+// startScheduler loads enabled schedules from the database and registers
+// them as periodic tasks on an asynq.Scheduler. Returns the running scheduler.
+func startScheduler(logger *slog.Logger, redisAddr string, svc scheduling.ScheduleService) (*asynq.Scheduler, error) {
+	redisOpt, err := parseRedisAddr(redisAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduler := asynq.NewScheduler(redisOpt, nil)
+
+	ctx := context.Background()
+	schedules, err := svc.ListAllEnabled(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list enabled schedules: %w", err)
+	}
+
+	for i := range schedules {
+		s := &schedules[i]
+		payload := &queue.ReportPayload{
+			TenantID:   s.TenantID,
+			ReportType: string(s.Type),
+			ScheduleID: s.ID.String(),
+		}
+		if s.Focus != "" {
+			payload.FocusAreas = []string{s.Focus}
+		}
+
+		task, err := queue.NewReportTask(payload)
+		if err != nil {
+			logger.Warn("skipping schedule: invalid task",
+				"schedule_id", s.ID,
+				"tenant_id", s.TenantID,
+				"error", err,
+			)
+			continue
+		}
+
+		entryID, err := scheduler.Register(s.CronExpr, task)
+		if err != nil {
+			logger.Warn("failed to register schedule",
+				"schedule_id", s.ID,
+				"tenant_id", s.TenantID,
+				"cron", s.CronExpr,
+				"error", err,
+			)
+			continue
+		}
+
+		logger.Info("registered periodic task",
+			"entry_id", entryID,
+			"schedule_id", s.ID,
+			"tenant_id", s.TenantID,
+			"type", s.Type,
+			"cron", s.CronExpr,
+		)
+	}
+
+	if err := scheduler.Start(); err != nil {
+		return nil, fmt.Errorf("scheduler start: %w", err)
+	}
+
+	logger.Info("scheduler started", "registered", len(schedules))
+	return scheduler, nil
+}
+
+// parseRedisAddr converts a Redis address string to asynq.RedisClientOpt.
+func parseRedisAddr(addr string) (asynq.RedisClientOpt, error) {
+	if len(addr) > 8 && addr[:8] == "redis://" {
+		connOpt, err := asynq.ParseRedisURI(addr)
+		if err != nil {
+			return asynq.RedisClientOpt{}, fmt.Errorf("parse redis URL: %w", err)
+		}
+		clientOpt, ok := connOpt.(asynq.RedisClientOpt)
+		if !ok {
+			return asynq.RedisClientOpt{}, fmt.Errorf("unsupported redis URL type")
+		}
+		return clientOpt, nil
+	}
+	return asynq.RedisClientOpt{Addr: addr}, nil
 }

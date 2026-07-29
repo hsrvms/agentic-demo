@@ -53,9 +53,10 @@ func TestNewReportTask_EncodesPayload(t *testing.T) {
 		ReportType:     "daily",
 		FocusAreas:     []string{"revenue", "churn"},
 		DeliveryMethod: "email",
+		ScheduleID:     "sch-123",
 	}
 
-	task, err := NewReportTask(payload)
+	task, err := NewReportTask(&payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,24 +75,27 @@ func TestNewReportTask_EncodesPayload(t *testing.T) {
 	if len(decoded.FocusAreas) != 2 {
 		t.Fatalf("expected 2 FocusAreas, got %d", len(decoded.FocusAreas))
 	}
+	if decoded.ScheduleID != "sch-123" {
+		t.Fatalf("expected ScheduleID 'sch-123', got %q", decoded.ScheduleID)
+	}
 }
 
 func TestNewReportTask_MissingTenantID(t *testing.T) {
-	_, err := NewReportTask(ReportPayload{ReportType: "daily"})
+	_, err := NewReportTask(&ReportPayload{ReportType: "daily"})
 	if err == nil {
 		t.Fatal("expected error for missing TenantID, got nil")
 	}
 }
 
 func TestNewReportTask_MissingReportType(t *testing.T) {
-	_, err := NewReportTask(ReportPayload{TenantID: "tenant-1"})
+	_, err := NewReportTask(&ReportPayload{TenantID: "tenant-1"})
 	if err == nil {
 		t.Fatal("expected error for missing ReportType, got nil")
 	}
 }
 
 func TestNewReportTask_InvalidReportType(t *testing.T) {
-	_, err := NewReportTask(ReportPayload{TenantID: "tenant-1", ReportType: "bogus"})
+	_, err := NewReportTask(&ReportPayload{TenantID: "tenant-1", ReportType: "bogus"})
 	if err == nil {
 		t.Fatal("expected error for invalid ReportType, got nil")
 	}

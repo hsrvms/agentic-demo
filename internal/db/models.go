@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
@@ -21,6 +22,18 @@ type Chunk struct {
 	Date         time.Time          `json:"date"`
 	Metadata     []byte             `json:"metadata"`
 	CreatedAt    time.Time          `json:"created_at"`
+}
+
+type ReportSchedule struct {
+	ID        uuid.UUID   `json:"id"`
+	TenantID  string      `json:"tenant_id"`
+	Type      string      `json:"type"`
+	CronExpr  string      `json:"cron_expr"`
+	Focus     pgtype.Text `json:"focus"`
+	Format    string      `json:"format"`
+	Enabled   bool        `json:"enabled"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
 }
 
 type Tenant struct {

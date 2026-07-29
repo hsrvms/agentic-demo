@@ -38,6 +38,7 @@ type ReportPayload struct {
 	ReportType     string   `json:"report_type"`
 	FocusAreas     []string `json:"focus_areas,omitempty"`
 	DeliveryMethod string   `json:"delivery_method,omitempty"`
+	ScheduleID     string   `json:"schedule_id,omitempty"`
 }
 
 // DeliveryPayload carries data for delivery tasks.
@@ -58,7 +59,7 @@ func NewIngestionTask(payload IngestionPayload) (*asynq.Task, error) {
 }
 
 // NewReportTask creates an asynq task for report generation with validated payload.
-func NewReportTask(payload ReportPayload) (*asynq.Task, error) {
+func NewReportTask(payload *ReportPayload) (*asynq.Task, error) {
 	if payload.TenantID == "" {
 		return nil, fmt.Errorf("report payload: tenant_id is required")
 	}
