@@ -39,10 +39,12 @@ type LLMUsage struct {
 
 type ToolUsage struct {
 	ToolName string
+	Model    string
 	Success  bool
 }
 
 type EmbeddingUsage struct {
+	Model           string
 	ChunksProcessed int
 }
 
