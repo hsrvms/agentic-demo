@@ -43,8 +43,9 @@ type ReportPayload struct {
 
 // DeliveryPayload carries data for delivery tasks.
 type DeliveryPayload struct {
-	TenantID string `json:"tenant_id"`
-	ReportID string `json:"report_id"`
+	TenantID       string `json:"tenant_id"`
+	ReportID       string `json:"report_id"`
+	RecipientEmail string `json:"recipient_email,omitempty"`
 }
 
 // NewIngestionTask creates an asynq task for ingestion with validated payload.

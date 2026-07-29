@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/delivery"
 	"github.com/agentic-demo/platform/internal/ingestion"
 	"github.com/agentic-demo/platform/internal/knowledge"
 	"github.com/agentic-demo/platform/internal/llm"
@@ -101,12 +102,42 @@ func run(logger *slog.Logger) error {
 	scheduleRepo := scheduling.NewRepository(queries)
 	scheduleService := scheduling.NewService(scheduleRepo)
 
+	// Build report persistence service.
+	reportRepo := reports.NewRepository(queries)
+	reportService := reports.NewService(reportRepo)
+
+	// Build delivery service. Use SMTP when configured, otherwise log mode.
+	var deliveryService delivery.DeliveryService
+	if cfg.SMTPHost != "" {
+		deliveryService = delivery.NewSMTPService(delivery.SMTPConfig{
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.SMTPFrom,
+		}, logger)
+		logger.Info("delivery: using SMTP", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+	} else {
+		deliveryService = delivery.NewLogService(logger)
+		logger.Info("delivery: using log mode (no SMTP_HOST configured)")
+	}
+
+	// Build job queue for enqueuing delivery tasks.
+	jobQueue, err := queue.NewAsynqQueue(cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("job queue: %w", err)
+	}
+	defer jobQueue.Close()
+
 	// Build handler deps and start worker server.
 	deps := queue.HandlerDeps{
-		IngestWorker: ingestWorker,
-		ReportWorker: reportWorker,
-		RateLimiter:  rateLimiter,
-		Logger:       logger,
+		IngestWorker:    ingestWorker,
+		ReportWorker:    reportWorker,
+		ReportService:   reportService,
+		DeliveryService: deliveryService,
+		Queue:           jobQueue,
+		RateLimiter:     rateLimiter,
+		Logger:          logger,
 	}
 
 	serverCfg := queue.ServerConfig{
