@@ -16,9 +16,13 @@ headers {
 
 body:json {
   {
-    "email": "alice@example.com",
+    "email": "{{test_email}}",
     "password": "securepass123"
   }
+}
+
+script:pre-request {
+  bru.setVar("test_email", "alice-" + Date.now() + "@example.com");
 }
 
 script:post-response {
