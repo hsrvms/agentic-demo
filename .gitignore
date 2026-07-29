@@ -20,3 +20,4 @@ vendor/
 .piv/
 tmp/
 worker
+server

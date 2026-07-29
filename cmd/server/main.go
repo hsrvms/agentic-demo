@@ -20,6 +20,7 @@ import (
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/labstack/echo/v4"
@@ -56,6 +57,9 @@ func main() {
 
 	scheduleRepo := scheduling.NewRepository(queries)
 	scheduleService := scheduling.NewService(scheduleRepo)
+
+	reportRepo := reports.NewRepository(queries)
+	reportService := reports.NewService(reportRepo)
 
 	// Echo setup.
 	e := echo.New()
@@ -98,6 +102,10 @@ func main() {
 	// Schedule routes (tenant-scoped).
 	scheduleHandler := scheduling.NewHandler(scheduleService)
 	scheduleHandler.Register(api, tenantMw)
+
+	// Report routes (tenant-scoped).
+	reportHandler := reports.NewHandler(reportService)
+	reportHandler.Register(api, tenantMw)
 
 	// Graceful shutdown.
 	go func() {

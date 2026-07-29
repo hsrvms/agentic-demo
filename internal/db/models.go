@@ -24,6 +24,19 @@ type Chunk struct {
 	CreatedAt    time.Time          `json:"created_at"`
 }
 
+type Report struct {
+	ID          uuid.UUID   `json:"id"`
+	TenantID    string      `json:"tenant_id"`
+	Type        string      `json:"type"`
+	Title       string      `json:"title"`
+	Content     string      `json:"content"`
+	Citations   []byte      `json:"citations"`
+	Focus       pgtype.Text `json:"focus"`
+	ScheduleID  pgtype.UUID `json:"schedule_id"`
+	GeneratedAt time.Time   `json:"generated_at"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
 type ReportSchedule struct {
 	ID        uuid.UUID   `json:"id"`
 	TenantID  string      `json:"tenant_id"`

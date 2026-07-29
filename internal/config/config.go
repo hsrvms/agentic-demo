@@ -39,6 +39,13 @@ type Config struct {
 	QueueReportWeight      int
 	QueueDeliveryWeight    int
 	MaxActiveJobsPerTenant int
+
+	// SMTP configuration for email delivery.
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 func Load() (*Config, error) {
@@ -61,6 +68,11 @@ func Load() (*Config, error) {
 		QueueReportWeight:        getEnvInt("QUEUE_REPORT_WEIGHT", 2),
 		QueueDeliveryWeight:      getEnvInt("QUEUE_DELIVERY_WEIGHT", 1),
 		MaxActiveJobsPerTenant:   getEnvInt("MAX_ACTIVE_JOBS_PER_TENANT", 3),
+		SMTPHost:                 getEnv("SMTP_HOST", ""),
+		SMTPPort:                 getEnvInt("SMTP_PORT", 587),
+		SMTPUsername:             getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:             getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:                 getEnv("SMTP_FROM", "noreply@platform.local"),
 	}
 
 	if err := cfg.validate(); err != nil {
