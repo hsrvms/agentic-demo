@@ -66,6 +66,27 @@ type TenantMembership struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type UsageDaily struct {
+	ID               uuid.UUID      `json:"id"`
+	TenantID         string         `json:"tenant_id"`
+	Date             pgtype.Date    `json:"date"`
+	LlmModel         string         `json:"llm_model"`
+	InputTokens      int64          `json:"input_tokens"`
+	OutputTokens     int64          `json:"output_tokens"`
+	ToolCalls        int32          `json:"tool_calls"`
+	EmbeddingTokens  int64          `json:"embedding_tokens"`
+	EstimatedCostUsd pgtype.Numeric `json:"estimated_cost_usd"`
+	ReportsGenerated int32          `json:"reports_generated"`
+}
+
+type UsageEvent struct {
+	ID        uuid.UUID `json:"id"`
+	TenantID  string    `json:"tenant_id"`
+	EventType string    `json:"event_type"`
+	Payload   []byte    `json:"payload"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Email        string    `json:"email"`
