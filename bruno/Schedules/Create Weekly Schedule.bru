@@ -1,0 +1,46 @@
+meta {
+  name: Create Weekly Schedule
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/schedules
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+  X-Tenant-ID: {{tenant_id}}
+}
+
+body:json {
+  {
+    "type": "weekly",
+    "cron_expr": "0 8 * * 1",
+    "focus": "weekly team performance review",
+    "format": "detailed"
+  }
+}
+
+script:post-response {
+  test("Status code is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  const body = res.getBody();
+  test("Response has required fields", function () {
+    expect(body.id).to.not.be.undefined;
+    expect(body.type).to.equal("weekly");
+    expect(body.cron_expr).to.equal("0 8 * * 1");
+    expect(body.enabled).to.equal(true);
+    expect(body.focus).to.equal("weekly team performance review");
+    expect(body.format).to.equal("detailed");
+  });
+
+  bru.setVar("weekly_schedule_id", body.id);
+  console.log("Weekly schedule ID:", body.id);
+  console.log("Response:", JSON.stringify(body));
+}

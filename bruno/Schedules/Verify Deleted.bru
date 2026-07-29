@@ -1,0 +1,34 @@
+meta {
+  name: Verify Deleted
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/api/schedules
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  const types = body.map(s => s.type);
+  test("Weekly schedule was deleted", function () {
+    expect(types).to.not.include("weekly");
+  });
+  test("Daily schedule still exists", function () {
+    expect(types).to.include("daily");
+  });
+
+  console.log("Remaining schedules:", body.length, "- types:", types);
+  console.log("Response:", JSON.stringify(body));
+}
