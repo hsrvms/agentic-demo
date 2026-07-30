@@ -2,7 +2,10 @@ package knowledge
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -45,12 +48,38 @@ func unitVector(dim, idx int) []float32 {
 	return v
 }
 
-// setupStore spins up a Postgres+pgvector container, runs migrations,
+// migrationSQL reads and returns the initial migration file content.
+func migrationSQL() ([]byte, error) {
+	return os.ReadFile("../../sql/migrations/001_initial.sql")
+}
+
+// setupStore spins up a Postgres+pgvector environment, runs migrations,
 // and returns a PgVectorStore and a cleanup function.
+//
+// It first attempts testcontainers (for CI with Docker). If Docker is
+// unavailable, it falls back to a running Postgres instance (e.g. in a
+// devcontainer) by creating an ephemeral test database.
 func setupStore(t *testing.T) (*PgVectorStore, func()) {
 	t.Helper()
 	ctx := context.Background()
 
+	// Try testcontainers first.
+	store, cleanup, err := setupStoreContainer(t, ctx)
+	if err == nil {
+		return store, cleanup
+	}
+	t.Logf("testcontainers unavailable: %v — falling back to running Postgres", err)
+
+	// Fall back to running Postgres instance.
+	store, cleanup, err = setupStoreLocal(t, ctx)
+	if err != nil {
+		t.Fatalf("failed to set up test store: %v", err)
+	}
+	return store, cleanup
+}
+
+// setupStoreContainer uses testcontainers to start an ephemeral Postgres.
+func setupStoreContainer(t *testing.T, ctx context.Context) (*PgVectorStore, func(), error) {
 	req := testcontainers.ContainerRequest{
 		Image: "pgvector/pgvector:pg16",
 		Env: map[string]string{
@@ -70,38 +99,117 @@ func setupStore(t *testing.T) (*PgVectorStore, func()) {
 		Started:          true,
 	})
 	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
+		return nil, nil, fmt.Errorf("start postgres container: %w", err)
 	}
 
 	host, err := pgContainer.Host(ctx)
 	if err != nil {
-		t.Fatalf("failed to get host: %v", err)
+		pgContainer.Terminate(ctx)
+		return nil, nil, fmt.Errorf("get host: %w", err)
 	}
 	port, err := pgContainer.MappedPort(ctx, "5432")
 	if err != nil {
-		t.Fatalf("failed to get port: %v", err)
+		pgContainer.Terminate(ctx)
+		return nil, nil, fmt.Errorf("get port: %w", err)
 	}
 
 	connStr := fmt.Sprintf("postgres://testuser:testpass@%s:%s/testdb?sslmode=disable", host, port.Port())
 	t.Logf("connection string: %s", connStr)
 
-	pool, err := pgxpool.New(ctx, connStr)
+	store, cleanup, err := connectAndMigrate(t, ctx, connStr)
 	if err != nil {
 		pgContainer.Terminate(ctx)
-		t.Fatalf("failed to create connection pool: %v", err)
+		return nil, nil, err
 	}
 
-	// Run migration.
-	migration, err := os.ReadFile("../../internal/db/migrations/001_initial.sql")
+	wrappedCleanup := func() {
+		cleanup()
+		pgContainer.Terminate(ctx)
+	}
+	return store, wrappedCleanup, nil
+}
+
+// setupStoreLocal creates an ephemeral database on a running Postgres instance.
+// It uses DATABASE_URL or falls back to the default devcontainer connection.
+func setupStoreLocal(t *testing.T, ctx context.Context) (*PgVectorStore, func(), error) {
+	baseConnStr := os.Getenv("DATABASE_URL")
+	if baseConnStr == "" {
+		baseConnStr = "postgres://app:app@postgres:5432/app?sslmode=disable"
+	}
+
+	// Connect to the base database to create the test database.
+	basePool, err := pgxpool.New(ctx, baseConnStr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect to base database: %w", err)
+	}
+	defer basePool.Close()
+
+	// Create a unique, short database name (stays under PostgreSQL's 63-char limit).
+	var randBytes [4]byte
+	if _, err := rand.Read(randBytes[:]); err != nil {
+		return nil, nil, fmt.Errorf("generate random bytes: %w", err)
+	}
+	dbName := fmt.Sprintf("test_know_%s", hex.EncodeToString(randBytes[:]))
+
+	if _, err := basePool.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName)); err != nil {
+		return nil, nil, fmt.Errorf("create test database %s: %w", dbName, err)
+	}
+
+	// Build connection string for the test database by parsing the URL.
+	connStr, err := withDBName(baseConnStr, dbName)
+	if err != nil {
+		basePool.Exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+		return nil, nil, fmt.Errorf("build connection string: %w", err)
+	}
+	t.Logf("connection string: %s", connStr)
+
+	store, cleanup, err := connectAndMigrate(t, ctx, connStr)
+	if err != nil {
+		basePool.Exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+		return nil, nil, err
+	}
+
+	wrappedCleanup := func() {
+		cleanup()
+		p, err := pgxpool.New(context.Background(), baseConnStr)
+		if err == nil {
+			p.Exec(context.Background(),
+				"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+				dbName)
+			p.Exec(context.Background(), fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+			p.Close()
+		}
+	}
+	return store, wrappedCleanup, nil
+}
+
+// withDBName returns a copy of the postgres connection string with the
+// database name replaced.
+func withDBName(connStr, dbName string) (string, error) {
+	u, err := url.Parse(connStr)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/" + dbName
+	return u.String(), nil
+}
+
+// connectAndMigrate connects to a database, runs the initial migration,
+// and returns a PgVectorStore and cleanup function.
+func connectAndMigrate(t *testing.T, ctx context.Context, connStr string) (*PgVectorStore, func(), error) {
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create connection pool: %w", err)
+	}
+
+	sqlBytes, err := migrationSQL()
 	if err != nil {
 		pool.Close()
-		pgContainer.Terminate(ctx)
-		t.Fatalf("failed to read migration: %v", err)
+		return nil, nil, fmt.Errorf("read migration: %w", err)
 	}
-	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+	if _, err := pool.Exec(ctx, string(sqlBytes)); err != nil {
 		pool.Close()
-		pgContainer.Terminate(ctx)
-		t.Fatalf("failed to run migration: %v", err)
+		return nil, nil, fmt.Errorf("run migration: %w", err)
 	}
 
 	store := &PgVectorStore{
@@ -111,10 +219,8 @@ func setupStore(t *testing.T) (*PgVectorStore, func()) {
 
 	cleanup := func() {
 		pool.Close()
-		pgContainer.Terminate(ctx)
 	}
-
-	return store, cleanup
+	return store, cleanup, nil
 }
 
 // setupStoreWithEmbedder is like setupStore but uses the provided embedder.
