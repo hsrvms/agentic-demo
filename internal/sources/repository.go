@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -43,7 +44,10 @@ func (r *pgRepository) Create(ctx context.Context, params *db.CreateDataSourcePa
 func (r *pgRepository) GetByID(ctx context.Context, id uuid.UUID) (db.DataSourceConfig, error) {
 	row, err := r.queries.GetDataSourceByID(ctx, id)
 	if err != nil {
-		return db.DataSourceConfig{}, fmt.Errorf("get data source: %w", err)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return db.DataSourceConfig{}, err
+		}
+		return db.DataSourceConfig{}, ErrNotFound
 	}
 	return row, nil
 }
