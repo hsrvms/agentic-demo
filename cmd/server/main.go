@@ -23,6 +23,7 @@ import (
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/tenant"
+	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -106,6 +107,17 @@ func main() {
 	// Report routes (tenant-scoped).
 	reportHandler := reports.NewHandler(reportService)
 	reportHandler.Register(api, tenantMw)
+
+	// Usage routes (tenant-scoped).
+	usageRepo := usage.NewRepository(queries)
+	usageReader, err := usage.NewRedisReader(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("usage reader: %v", err)
+	}
+	defer usageReader.Close()
+	usageService := usage.NewService(usageRepo, usageReader)
+	usageHandler := usage.NewHandler(usageService)
+	usageHandler.Register(api, tenantMw)
 
 	// Graceful shutdown.
 	go func() {
