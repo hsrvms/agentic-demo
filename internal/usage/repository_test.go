@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 // mockRepository implements Repository for testing.
 type mockRepository struct {
+	mu          sync.Mutex
 	events      []UsageEventRecord
 	dailyRows   []UsageDailyRecord
 	createErr   error
@@ -34,7 +36,9 @@ func (m *mockRepository) CreateEvent(ctx context.Context, params *db.CreateUsage
 		Payload:   json.RawMessage(params.Payload),
 		CreatedAt: time.Now(),
 	}
+	m.mu.Lock()
 	m.events = append(m.events, rec)
+	m.mu.Unlock()
 	return rec, nil
 }
 
@@ -42,10 +46,14 @@ func (m *mockRepository) ListEvents(ctx context.Context, params *db.ListUsageEve
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.events, nil
 }
 
 func (m *mockRepository) CountEvents(ctx context.Context, params *db.CountUsageEventsParams) (int32, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return int32(len(m.events)), nil
 }
 
@@ -65,7 +73,9 @@ func (m *mockRepository) UpsertDaily(ctx context.Context, params *db.UpsertUsage
 		EstimatedCostUSD: pgNumericToFloat64(params.EstimatedCostUsd),
 		ReportsGenerated: params.ReportsGenerated,
 	}
+	m.mu.Lock()
 	m.dailyRows = append(m.dailyRows, rec)
+	m.mu.Unlock()
 	return rec, nil
 }
 
@@ -73,10 +83,14 @@ func (m *mockRepository) GetDailySummary(ctx context.Context, params *db.GetUsag
 	if m.summaryErr != nil {
 		return nil, m.summaryErr
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.dailyRows, nil
 }
 
 func (m *mockRepository) CountDaily(ctx context.Context, params *db.CountUsageDailyParams) (int32, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return int32(len(m.dailyRows)), nil
 }
 
