@@ -1,0 +1,29 @@
+meta {
+  name: Sync Source
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/api/sources/{{source_id}}/sync
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 202", function () {
+    expect(res.getStatus()).to.equal(202);
+  });
+
+  const body = res.getBody();
+  test("Response has message", function () {
+    expect(body.message).to.be.a("string");
+  });
+
+  console.log("Sync enqueued:", body.message);
+}

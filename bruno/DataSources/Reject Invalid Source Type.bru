@@ -1,0 +1,33 @@
+meta {
+  name: Reject Invalid Source Type
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/api/sources
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_type": "invalid_type",
+    "name": "Bad Source",
+    "config": {}
+  }
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  console.log("Correctly rejected invalid source type:", res.getBody());
+}

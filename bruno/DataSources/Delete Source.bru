@@ -1,0 +1,55 @@
+meta {
+  name: Delete Source
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{base_url}}/api/sources/{{source_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 204", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+
+  console.log("Deleted source:", bru.getVar("source_id"));
+}
+
+script:post-response {
+  // Verify the source is gone.
+  const http = require("http");
+
+  test("Source is no longer accessible after delete", function () {
+    const url = bru.getVar("base_url") + "/api/sources/" + bru.getVar("source_id");
+    const headers = {
+      "Authorization": "Bearer " + bru.getVar("token"),
+      "X-Tenant-ID": bru.getVar("tenant_id")
+    };
+
+    return new Promise(function (resolve, reject) {
+      const lib = url.startsWith("https") ? require("https") : require("http");
+      const parsed = lib === require("https") ? require("url").parse(url) : require("url").parse(url);
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.path,
+        method: "GET",
+        headers: headers
+      };
+      const req = lib.request(options, function (resp) {
+        expect(resp.statusCode).to.equal(404);
+        resolve();
+      });
+      req.on("error", reject);
+      req.end();
+    });
+  });
+}
