@@ -1,0 +1,45 @@
+meta {
+  name: Usage Summary
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/usage/summary?from=2026-07-01&to=2026-07-31
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has tenant_id", function () {
+    expect(body.tenant_id).to.be.a("string");
+  });
+  test("Response has from and to", function () {
+    expect(body.from).to.equal("2026-07-01");
+    expect(body.to).to.equal("2026-07-31");
+  });
+  test("Response has total_cost_usd", function () {
+    expect(body.total_cost_usd).to.be.a("number");
+  });
+  test("models is an array", function () {
+    expect(body.models).to.be.an("array");
+  });
+
+  console.log("Usage summary:", JSON.stringify({
+    tenant_id: body.tenant_id,
+    from: body.from,
+    to: body.to,
+    total_cost_usd: body.total_cost_usd,
+    models: body.models.length
+  }));
+}

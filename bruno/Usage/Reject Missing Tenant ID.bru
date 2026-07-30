@@ -1,0 +1,21 @@
+meta {
+  name: Usage — Missing Tenant ID
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/api/usage/current
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 401", function () {
+    expect(res.getStatus()).to.equal(401);
+  });
+}
