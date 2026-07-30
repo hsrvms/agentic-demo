@@ -1,0 +1,48 @@
+meta {
+  name: List Invoices
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/invoices?page=1&limit=20
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has invoices array", function () {
+    expect(body.invoices).to.be.an("array");
+  });
+  test("Response has total_count", function () {
+    expect(body.total_count).to.be.a("number");
+  });
+  test("Response has page and page_size", function () {
+    expect(body.page).to.equal(1);
+    expect(body.page_size).to.equal(20);
+  });
+  test("Invoice items have required fields", function () {
+    body.invoices.forEach(function (inv) {
+      expect(inv.id).to.be.a("string");
+      expect(inv.tenant_id).to.be.a("string");
+      expect(inv.period_start).to.be.a("string");
+      expect(inv.period_end).to.be.a("string");
+      expect(inv.total_cost_usd).to.be.a("number");
+      expect(inv.line_items).to.be.an("array");
+      expect(inv.status).to.be.a("string");
+      expect(inv.created_at).to.be.a("string");
+    });
+  });
+
+  console.log("Invoices listed:", body.invoices.length, "of", body.total_count);
+}

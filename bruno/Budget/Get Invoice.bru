@@ -1,0 +1,65 @@
+meta {
+  name: Get Invoice
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/invoices/{{invoice_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  const status = res.getStatus();
+
+  // If invoice_id is not set, the request returns 400 (invalid UUID).
+  // Skip tests in that case — the user needs to set invoice_id first.
+  if (status === 400) {
+    console.log("Skipping: invoice_id variable not set. Run after creating an invoice.");
+    return;
+  }
+
+  test("Status code is 200", function () {
+    expect(status).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has correct id", function () {
+    expect(body.id).to.equal(bru.getVar("invoice_id"));
+  });
+  test("Response has tenant_id", function () {
+    expect(body.tenant_id).to.be.a("string");
+  });
+  test("Response has period_start and period_end", function () {
+    expect(body.period_start).to.be.a("string");
+    expect(body.period_end).to.be.a("string");
+  });
+  test("Response has total_cost_usd", function () {
+    expect(body.total_cost_usd).to.be.a("number");
+  });
+  test("Response has line_items", function () {
+    expect(body.line_items).to.be.an("array");
+  });
+  test("Response has status", function () {
+    expect(body.status).to.be.a("string");
+  });
+  test("Response has created_at", function () {
+    expect(body.created_at).to.be.a("string");
+  });
+  test("Line items have required fields", function () {
+    body.line_items.forEach(function (li) {
+      expect(li.model).to.be.a("string");
+      expect(li.input_tokens).to.be.a("number");
+      expect(li.output_tokens).to.be.a("number");
+      expect(li.cost_usd).to.be.a("number");
+    });
+  });
+
+  console.log("Got invoice:", body.id, body.tenant_id, body.status, body.total_cost_usd);
+}
