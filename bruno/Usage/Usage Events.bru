@@ -1,0 +1,36 @@
+meta {
+  name: Usage Events
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/usage/events?page=1&limit=10
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has pagination", function () {
+    expect(body.events).to.be.an("array");
+    expect(body.total_count).to.be.a("number");
+    expect(body.page).to.equal(1);
+    expect(body.page_size).to.equal(10);
+  });
+
+  console.log("Usage events:", JSON.stringify({
+    total_count: body.total_count,
+    page: body.page,
+    events_in_page: body.events.length
+  }));
+}

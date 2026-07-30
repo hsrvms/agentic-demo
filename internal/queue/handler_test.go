@@ -93,6 +93,7 @@ func TestIngestHandler_ProcessTask(t *testing.T) {
 		&mockEmbedder{},
 		ks,
 		usage.NoOpEmitter{},
+		"text-embedding-v4",
 	)
 
 	handler := &IngestHandler{worker: worker}
@@ -310,6 +311,7 @@ func TestRegisterHandlers(t *testing.T) {
 			&mockEmbedder{},
 			ks,
 			usage.NoOpEmitter{},
+			"text-embedding-v4",
 		),
 		ReportWorker: reports.NewReportWorker(
 			ks,

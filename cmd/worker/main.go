@@ -72,8 +72,15 @@ func run(logger *slog.Logger) error {
 	provider := llm.NewDashScopeProvider(cfg.DashScopeAPIKey, cfg.DashScopeBaseURL, cfg.LLMModel)
 	llmClient := llm.NewClient(provider, nil)
 
+	// Build usage emitter. Uses Redis for real-time counters and flush queue.
+	usageEmitter, err := usage.NewRedisEmitter(cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("usage emitter: %w", err)
+	}
+	defer usageEmitter.Close()
+
 	// Build tool registry.
-	toolRegistry := tools.NewRegistry(usage.NoOpEmitter{})
+	toolRegistry := tools.NewRegistry(usageEmitter)
 
 	// Build domain workers.
 	// Connectors are empty — configured in later workstreams.
@@ -82,14 +89,15 @@ func run(logger *slog.Logger) error {
 		knowledge.NewRecursiveChunker(1000, 200),
 		embedder,
 		ks,
-		usage.NoOpEmitter{},
+		usageEmitter,
+		cfg.EmbeddingModel,
 	)
 
 	reportWorker := reports.NewReportWorker(
 		ks,
 		llmClient,
 		toolRegistry,
-		usage.NoOpEmitter{},
+		usageEmitter,
 		cfg.MaxToolCalls,
 		cfg.MaxLLMCalls,
 		cfg.MaxExecutionDuration(),
@@ -158,6 +166,20 @@ func run(logger *slog.Logger) error {
 		"queues", cfg.QueueWeights(),
 	)
 
+	// Build usage repository and collector for persisting usage events.
+	usageRepo := usage.NewRepository(queries)
+	usageCollector, err := usage.NewCollector(cfg.RedisURL, usageRepo, logger)
+	if err != nil {
+		srv.Stop()
+		return fmt.Errorf("usage collector: %w", err)
+	}
+	defer usageCollector.Close()
+
+	collectorCtx, collectorCancel := context.WithCancel(context.Background())
+	defer collectorCancel()
+	go usageCollector.Start(collectorCtx)
+	logger.Info("usage collector started")
+
 	// Start the scheduler for periodic report generation.
 	scheduler, err := startScheduler(logger, cfg.RedisURL, scheduleService)
 	if err != nil {
@@ -171,6 +193,8 @@ func run(logger *slog.Logger) error {
 	sig := <-quit
 
 	logger.Info("received signal, shutting down", "signal", sig)
+	collectorCancel()
+	logger.Info("usage collector stopped")
 	scheduler.Shutdown()
 	logger.Info("scheduler stopped")
 	srv.Stop()

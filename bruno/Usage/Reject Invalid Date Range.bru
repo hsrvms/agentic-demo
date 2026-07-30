@@ -1,0 +1,27 @@
+meta {
+  name: Usage Summary — Invalid Date
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/usage/summary?from=2026-07-31&to=2026-07-01
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+
+  const body = res.getBody();
+  test("Error message mentions invalid date range", function () {
+    expect(body.message || body.error).to.match(/invalid date range/i);
+  });
+}

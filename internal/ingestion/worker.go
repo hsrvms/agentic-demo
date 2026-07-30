@@ -18,12 +18,13 @@ import (
 
 // IngestWorker orchestrates the full ingestion pipeline.
 type IngestWorker struct {
-	connectors map[string]Connector
-	chunker    knowledge.Chunker
-	embedder   knowledge.Embedder
-	store      knowledge.KnowledgeStore
-	emitter    usage.UsageEmitter
-	dedup      *Dedup
+	connectors     map[string]Connector
+	chunker        knowledge.Chunker
+	embedder       knowledge.Embedder
+	store          knowledge.KnowledgeStore
+	emitter        usage.UsageEmitter
+	dedup          *Dedup
+	embeddingModel string
 }
 
 func NewIngestWorker(
@@ -32,14 +33,16 @@ func NewIngestWorker(
 	embedder knowledge.Embedder,
 	store knowledge.KnowledgeStore,
 	emitter usage.UsageEmitter,
+	embeddingModel string,
 ) *IngestWorker {
 	return &IngestWorker{
-		connectors: connectors,
-		chunker:    chunker,
-		embedder:   embedder,
-		store:      store,
-		emitter:    emitter,
-		dedup:      NewDedup(),
+		connectors:     connectors,
+		chunker:        chunker,
+		embedder:       embedder,
+		store:          store,
+		emitter:        emitter,
+		dedup:          NewDedup(),
+		embeddingModel: embeddingModel,
 	}
 }
 
@@ -86,6 +89,7 @@ func (w *IngestWorker) Ingest(ctx context.Context, tenantID domain.TenantID, sou
 		Type:     usage.EventEmbedding,
 		TenantID: tenantID,
 		Embedding: &usage.EmbeddingUsage{
+			Model:           w.embeddingModel,
 			ChunksProcessed: len(unique),
 		},
 	})

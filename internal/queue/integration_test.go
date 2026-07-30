@@ -31,6 +31,7 @@ func integrationDeps(t *testing.T) (HandlerDeps, *mockConnector, *mockKnowledgeS
 			&mockEmbedder{},
 			ks,
 			usage.NoOpEmitter{},
+			"text-embedding-v4",
 		),
 		ReportWorker: reports.NewReportWorker(
 			ks,

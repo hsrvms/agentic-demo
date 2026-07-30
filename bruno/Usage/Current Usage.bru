@@ -1,0 +1,53 @@
+meta {
+  name: Current Usage
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/usage/current
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has tenant_id", function () {
+    expect(body.tenant_id).to.be.a("string");
+  });
+  test("Response has period_start and period_end", function () {
+    expect(body.period_start).to.be.a("string");
+    expect(body.period_end).to.be.a("string");
+  });
+  test("Response has numeric counters", function () {
+    expect(body.total_input_tokens).to.be.a("number");
+    expect(body.total_output_tokens).to.be.a("number");
+    expect(body.total_tool_calls).to.be.a("number");
+    expect(body.total_embedding_tokens).to.be.a("number");
+    expect(body.total_cost_usd).to.be.a("number");
+    expect(body.reports_generated).to.be.a("number");
+  });
+  test("by_model is an array", function () {
+    expect(body.by_model).to.be.an("array");
+  });
+
+  console.log("Current usage:", JSON.stringify({
+    tenant_id: body.tenant_id,
+    period: body.period_start + " to " + body.period_end,
+    input_tokens: body.total_input_tokens,
+    output_tokens: body.total_output_tokens,
+    tool_calls: body.total_tool_calls,
+    cost_usd: body.total_cost_usd,
+    reports: body.reports_generated,
+    models: body.by_model.length
+  }));
+}
