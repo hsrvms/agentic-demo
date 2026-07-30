@@ -38,6 +38,17 @@ type DataSourceConfig struct {
 	UpdatedAt      time.Time          `json:"updated_at"`
 }
 
+type Invoice struct {
+	ID           uuid.UUID      `json:"id"`
+	TenantID     string         `json:"tenant_id"`
+	PeriodStart  pgtype.Date    `json:"period_start"`
+	PeriodEnd    pgtype.Date    `json:"period_end"`
+	TotalCostUsd pgtype.Numeric `json:"total_cost_usd"`
+	LineItems    []byte         `json:"line_items"`
+	Status       string         `json:"status"`
+	CreatedAt    time.Time      `json:"created_at"`
+}
+
 type Report struct {
 	ID          uuid.UUID   `json:"id"`
 	TenantID    string      `json:"tenant_id"`
@@ -64,12 +75,13 @@ type ReportSchedule struct {
 }
 
 type Tenant struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	Settings  []byte    `json:"settings"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID               string         `json:"id"`
+	Name             string         `json:"name"`
+	Status           string         `json:"status"`
+	Settings         []byte         `json:"settings"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	MonthlyBudgetUsd pgtype.Numeric `json:"monthly_budget_usd"`
 }
 
 type TenantMembership struct {

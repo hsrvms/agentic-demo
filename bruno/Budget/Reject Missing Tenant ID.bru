@@ -1,0 +1,21 @@
+meta {
+  name: Budget — Missing Tenant ID
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/api/budget/status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

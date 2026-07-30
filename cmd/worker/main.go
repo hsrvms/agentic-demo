@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
 	"github.com/agentic-demo/platform/internal/delivery"
@@ -70,7 +71,18 @@ func run(logger *slog.Logger) error {
 
 	// Build LLM client.
 	provider := llm.NewDashScopeProvider(cfg.DashScopeAPIKey, cfg.DashScopeBaseURL, cfg.LLMModel)
-	llmClient := llm.NewClient(provider, nil)
+
+	// Build usage reader for budget enforcement.
+	usageReader, err := usage.NewRedisReader(cfg.RedisURL)
+	if err != nil {
+		return fmt.Errorf("usage reader: %w", err)
+	}
+	defer usageReader.Close()
+
+	// Build budget checker and inject into LLM client.
+	budgetRepo := budget.NewRepository(queries)
+	budgetChecker := budget.NewBudgetChecker(budgetRepo, usageReader)
+	llmClient := llm.NewClientWithBudget(provider, nil, budgetChecker)
 
 	// Build usage emitter. Uses Redis for real-time counters and flush queue.
 	usageEmitter, err := usage.NewRedisEmitter(cfg.RedisURL)

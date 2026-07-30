@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
 	"github.com/agentic-demo/platform/internal/queue"
@@ -136,6 +137,12 @@ func main() {
 	usageService := usage.NewService(usageRepo, usageReader)
 	usageHandler := usage.NewHandler(usageService)
 	usageHandler.Register(api, tenantMw)
+
+	// Budget routes (tenant-scoped).
+	budgetRepo := budget.NewRepository(queries)
+	budgetService := budget.NewService(budgetRepo, usageReader, usageRepo)
+	budgetHandler := budget.NewHandler(budgetService)
+	budgetHandler.Register(api, tenantMw)
 
 	// Deferred cleanup.
 	defer usageReader.Close()

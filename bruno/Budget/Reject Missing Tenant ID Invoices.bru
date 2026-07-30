@@ -1,0 +1,21 @@
+meta {
+  name: Invoices — Missing Tenant ID
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/api/invoices
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

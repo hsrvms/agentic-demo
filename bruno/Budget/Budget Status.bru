@@ -1,0 +1,54 @@
+meta {
+  name: Budget Status
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/budget/status
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has tenant_id", function () {
+    expect(body.tenant_id).to.be.a("string");
+  });
+  test("Response has monthly_budget_usd", function () {
+    expect(body.monthly_budget_usd).to.be.a("number");
+  });
+  test("Response has month_to_date_cost_usd", function () {
+    expect(body.month_to_date_cost_usd).to.be.a("number");
+  });
+  test("Response has remaining_budget_usd", function () {
+    expect(body.remaining_budget_usd).to.be.a("number");
+  });
+  test("Response has percent_used", function () {
+    expect(body.percent_used).to.be.a("number");
+  });
+  test("Response has is_exceeded", function () {
+    expect(body.is_exceeded).to.be.a("boolean");
+  });
+  test("remaining_budget_usd = monthly_budget_usd - month_to_date_cost_usd", function () {
+    expect(body.remaining_budget_usd).to.be.at.most(body.monthly_budget_usd);
+  });
+
+  console.log("Budget status:", JSON.stringify({
+    tenant_id: body.tenant_id,
+    monthly_budget: body.monthly_budget_usd,
+    mtd_cost: body.month_to_date_cost_usd,
+    remaining: body.remaining_budget_usd,
+    percent_used: body.percent_used,
+    is_exceeded: body.is_exceeded
+  }));
+}
