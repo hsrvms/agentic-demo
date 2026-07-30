@@ -32,6 +32,7 @@ func testHandlerDeps(t *testing.T) (HandlerDeps, *mockConnector) {
 			&mockEmbedder{},
 			ks,
 			usage.NoOpEmitter{},
+			"text-embedding-v4",
 		),
 		ReportWorker: reports.NewReportWorker(
 			ks,

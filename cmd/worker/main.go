@@ -83,6 +83,7 @@ func run(logger *slog.Logger) error {
 		embedder,
 		ks,
 		usage.NoOpEmitter{},
+		cfg.EmbeddingModel,
 	)
 
 	reportWorker := reports.NewReportWorker(

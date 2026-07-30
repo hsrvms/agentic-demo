@@ -128,6 +128,7 @@ func (a *AgentLoop) Run(ctx context.Context, tenantID domain.TenantID, config do
 				TenantID: tenantID,
 				Tool: &usage.ToolUsage{
 					ToolName: tc.Name,
+					Model:    result.Model,
 					Success:  toolResult.Error == "",
 				},
 			})
