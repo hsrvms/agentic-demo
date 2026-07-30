@@ -1,0 +1,33 @@
+meta {
+  name: Test Connection
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/sources/{{source_id}}/test
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200 (success) or 422 (failure)", function () {
+    const status = res.getStatus();
+    expect([200, 422]).to.include(status);
+  });
+
+  const body = res.getBody();
+  test("Response has success flag", function () {
+    expect(body.success).to.be.a("boolean");
+  });
+  test("Response has message", function () {
+    expect(body.message).to.be.a("string");
+  });
+
+  console.log("Connection test:", body.success, body.message);
+}

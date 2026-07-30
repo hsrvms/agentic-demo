@@ -1,0 +1,48 @@
+meta {
+  name: Get Source
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/sources/{{source_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has correct id", function () {
+    expect(body.id).to.equal(bru.getVar("source_id"));
+  });
+  test("Response has source_type", function () {
+    expect(body.source_type).to.equal("website");
+  });
+  test("Response has name", function () {
+    expect(body.name).to.equal("Test Website");
+  });
+  test("Response has config", function () {
+    expect(body.config).to.be.an("object");
+  });
+  test("Credentials are decrypted in detail view", function () {
+    expect(body.credentials).to.be.an("object");
+    expect(body.credentials.api_key).to.equal("test-api-key-12345");
+  });
+  test("Response has created_at", function () {
+    expect(body.created_at).to.be.a("string");
+  });
+  test("Response has status", function () {
+    expect(body.status).to.be.a("string");
+  });
+
+  console.log("Got source:", body.id, body.name);
+}

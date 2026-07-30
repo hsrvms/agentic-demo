@@ -1,0 +1,53 @@
+meta {
+  name: List Sources
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/sources?page=1&limit=20
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has sources array", function () {
+    expect(body.sources).to.be.an("array");
+  });
+  test("Sources array has at least 1 item", function () {
+    expect(body.sources.length).to.be.at.least(1);
+  });
+  test("Response has total_count", function () {
+    expect(body.total_count).to.be.a("number");
+    expect(body.total_count).to.be.at.least(1);
+  });
+  test("Response has page and page_size", function () {
+    expect(body.page).to.equal(1);
+    expect(body.page_size).to.equal(20);
+  });
+  test("List items do not expose credentials", function () {
+    body.sources.forEach(function (s) {
+      expect(s.credentials).to.be.undefined;
+    });
+  });
+  test("List items have required fields", function () {
+    body.sources.forEach(function (s) {
+      expect(s.id).to.be.a("string");
+      expect(s.source_type).to.be.a("string");
+      expect(s.name).to.be.a("string");
+      expect(s.status).to.be.a("string");
+    });
+  });
+
+  console.log("Sources listed:", body.sources.length, "of", body.total_count);
+}

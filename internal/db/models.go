@@ -24,6 +24,20 @@ type Chunk struct {
 	CreatedAt    time.Time          `json:"created_at"`
 }
 
+type DataSourceConfig struct {
+	ID             uuid.UUID          `json:"id"`
+	TenantID       string             `json:"tenant_id"`
+	SourceType     string             `json:"source_type"`
+	Name           string             `json:"name"`
+	Config         []byte             `json:"config"`
+	Credentials    []byte             `json:"credentials"`
+	Status         string             `json:"status"`
+	LastSyncAt     pgtype.Timestamptz `json:"last_sync_at"`
+	LastSyncStatus pgtype.Text        `json:"last_sync_status"`
+	CreatedAt      time.Time          `json:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at"`
+}
+
 type Report struct {
 	ID          uuid.UUID   `json:"id"`
 	TenantID    string      `json:"tenant_id"`

@@ -1,0 +1,46 @@
+meta {
+  name: Update Source
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{base_url}}/api/sources/{{source_id}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Updated Website",
+    "status": "active",
+    "config": {
+      "url": "https://updated.example.com"
+    }
+  }
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Name is updated", function () {
+    expect(body.name).to.equal("Updated Website");
+  });
+  test("Status is updated", function () {
+    expect(body.status).to.equal("active");
+  });
+  test("Config is updated", function () {
+    expect(body.config.url).to.equal("https://updated.example.com");
+  });
+
+  console.log("Updated source:", body.id, body.name, body.status);
+}

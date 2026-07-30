@@ -1,0 +1,63 @@
+meta {
+  name: Create Source
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/sources
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "source_type": "website",
+    "name": "Test Website",
+    "config": {
+      "url": "https://example.com"
+    },
+    "credentials": {
+      "api_key": "test-api-key-12345"
+    }
+  }
+}
+
+script:post-response {
+  test("Status code is 201", function () {
+    expect(res.getStatus()).to.equal(201);
+  });
+
+  const body = res.getBody();
+  test("Response has id", function () {
+    expect(body.id).to.be.a("string");
+  });
+  test("Response has source_type", function () {
+    expect(body.source_type).to.equal("website");
+  });
+  test("Response has name", function () {
+    expect(body.name).to.equal("Test Website");
+  });
+  test("Response has status inactive", function () {
+    expect(body.status).to.equal("inactive");
+  });
+  test("Response has config", function () {
+    expect(body.config).to.be.an("object");
+    expect(body.config.url).to.equal("https://example.com");
+  });
+  test("Credentials are encrypted (not plaintext)", function () {
+    // Credentials are encrypted at rest; the response should not contain
+    // the plaintext "test-api-key-12345" unless the endpoint explicitly
+    // decrypts them (which is only on GET /sources/:id).
+    expect(body.credentials).to.be.undefined;
+  });
+
+  bru.setVar("source_id", body.id);
+  console.log("Created source:", body.id, body.name);
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Delete Source
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{base_url}}/api/sources/{{source_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 204", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+
+  console.log("Deleted source:", bru.getVar("source_id"));
+}

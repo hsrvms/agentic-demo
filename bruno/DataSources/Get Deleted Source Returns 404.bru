@@ -1,0 +1,24 @@
+meta {
+  name: Get Deleted Source Returns 404
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/api/sources/{{source_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 404", function () {
+    expect(res.getStatus()).to.equal(404);
+  });
+
+  console.log("Correctly returned 404 for deleted source");
+}
