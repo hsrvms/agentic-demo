@@ -1,10 +1,10 @@
 meta {
-  name: Delete Source
+  name: Get Deleted Source Returns 404
   type: http
-  seq: 7
+  seq: 8
 }
 
-delete {
+get {
   url: {{base_url}}/api/sources/{{source_id}}
   body: none
   auth: none
@@ -16,9 +16,9 @@ headers {
 }
 
 script:post-response {
-  test("Status code is 204", function () {
-    expect(res.getStatus()).to.equal(204);
+  test("Status code is 404", function () {
+    expect(res.getStatus()).to.equal(404);
   });
 
-  console.log("Deleted source:", bru.getVar("source_id"));
+  console.log("Correctly returned 404 for deleted source");
 }
