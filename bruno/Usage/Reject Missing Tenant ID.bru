@@ -15,7 +15,7 @@ headers {
 }
 
 script:post-response {
-  test("Status code is 401", function () {
-    expect(res.getStatus()).to.equal(401);
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
   });
 }
