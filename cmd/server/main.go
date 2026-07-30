@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"log"
 	"net/http"
 	"os"
@@ -20,8 +21,10 @@ import (
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
+	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/labstack/echo/v4"
@@ -108,16 +111,35 @@ func main() {
 	reportHandler := reports.NewHandler(reportService)
 	reportHandler.Register(api, tenantMw)
 
+	// Data source routes (tenant-scoped).
+	encryptionKey := sha256.Sum256([]byte(cfg.EncryptionKey))
+	cryptSvc, err := sources.NewAESGCMService(encryptionKey[:])
+	if err != nil {
+		log.Fatalf("crypto service: %v", err)
+	}
+	sourceRepo := sources.NewRepository(queries)
+	connectionTester := sources.NewConnectionTester()
+	jobQueue, err := queue.NewAsynqQueue(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("job queue: %v", err)
+	}
+	sourceService := sources.NewService(sourceRepo, cryptSvc, connectionTester, jobQueue)
+	sourceHandler := sources.NewHandler(sourceService)
+	sourceHandler.Register(api, tenantMw)
+
 	// Usage routes (tenant-scoped).
 	usageRepo := usage.NewRepository(queries)
 	usageReader, err := usage.NewRedisReader(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("usage reader: %v", err)
 	}
-	defer usageReader.Close()
 	usageService := usage.NewService(usageRepo, usageReader)
 	usageHandler := usage.NewHandler(usageService)
 	usageHandler.Register(api, tenantMw)
+
+	// Deferred cleanup.
+	defer usageReader.Close()
+	defer jobQueue.Close()
 
 	// Graceful shutdown.
 	go func() {
@@ -135,7 +157,7 @@ func main() {
 	cancel()
 	pool.Close()
 	if shutdownErr != nil {
-		log.Fatalf("shutdown error: %v", shutdownErr)
+		log.Printf("shutdown error: %v", shutdownErr)
 	}
 }
 

@@ -46,6 +46,9 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+
+	// Encryption key for data source credentials (AES-256-GCM, 32 bytes).
+	EncryptionKey string
 }
 
 func Load() (*Config, error) {
@@ -73,6 +76,7 @@ func Load() (*Config, error) {
 		SMTPUsername:             getEnv("SMTP_USERNAME", ""),
 		SMTPPassword:             getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:                 getEnv("SMTP_FROM", "noreply@platform.local"),
+		EncryptionKey:            getEnv("ENCRYPTION_KEY", "dev-encryption-key-change-in-prod!"),
 	}
 
 	if err := cfg.validate(); err != nil {
