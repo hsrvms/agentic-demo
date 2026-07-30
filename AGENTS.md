@@ -20,9 +20,10 @@ These rules apply to this Go project. They supplement the global engineering rul
 | `golangci-lint`    | Linter aggregator (replaces golint, etc.) |
 | `sqlc`             | Type-safe SQL generation from queries     |
 | `a-h/templ`            | Type-safe HTML template generation        |
-| `tailwindcss`      | Utility-first CSS (via CLI or standalone) |
 | `air`              | Live reload in development                |
 | `staticcheck`      | Additional static analysis                |
+
+Frontend assets (Tailwind CSS, Alpine.js, HTMX) are loaded via CDN — no build step required. See `.pi/skills/web-design-guide/` for the full design system.
 
 ---
 
@@ -64,12 +65,6 @@ project-root/
             pages/
                 home.templ
                 login.templ
-        static/
-            js/                  # Alpine.js components
-                app.js
-            css/
-                input.css        # Tailwind source
-                output.css       # Tailwind build output
     sql/
         migrations/              # numbered migration files
             001_create_users.sql
@@ -78,7 +73,9 @@ project-root/
             users.sql
             sessions.sql
     sqlc.yaml                    # sqlc configuration
-    tailwind.config.js           # Tailwind configuration
+    .pi/
+        skills/
+            web-design-guide/    # project design system skill
     .air.toml                    # air live-reload config
     .golangci.yaml               # linter configuration
 ```
@@ -87,7 +84,7 @@ Rules:
 
 - **`cmd/`** contains only `main.go` files — one per binary. No business logic.
 - **`internal/`** is organized by **domain**, not by technical layer.
-- **`web/`** holds templates, static assets, and frontend config.
+- **`web/`** holds templates. Frontend assets (Tailwind, Alpine.js, HTMX) are loaded via CDN — no build pipeline.
 - **`sql/`** separates migrations from queries. `sqlc` reads `queries/` and generates Go code.
 - Never import from `cmd/` into `internal/`.
 
@@ -270,6 +267,13 @@ Rules:
 
 ## HTMX Patterns
 
+HTMX is loaded via CDN.
+
+```html
+<!-- in base layout <head> -->
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+```
+
 Rules:
 
 - Use `hx-get`, `hx-post`, `hx-put`, `hx-delete`, `hx-patch` for server interactions.
@@ -321,14 +325,21 @@ func (h *UserHandler) Delete(c echo.Context) error {
 
 ## Alpine.js
 
+Alpine.js is loaded via CDN — no local JS files required.
+
+```html
+<!-- in base layout <head> -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+```
+
 Rules:
 
-- Use Alpine.js for client-side interactivity that doesn't need a server round-trip: dropdowns, modals, tabs, form validation feedback.
+- Use Alpine.js for client-side interactivity that doesn't need a server round-trip: dropdowns, modals, tabs, form validation feedback, theme toggling.
 - Keep Alpine state local and small. If state grows complex, it belongs in a backend component.
 - Use `x-data` with a function for reusable components.
 - Use `x-ref` to reference DOM elements instead of `document.querySelector`.
 - Avoid mixing HTMX and Alpine on the same element unless necessary.
-- Place Alpine component definitions in `web/static/js/`.
+- Add `[x-cloak] { display: none !important }` in base CSS to prevent flash of unstyled Alpine content.
 
 ```html
 <!-- Good: Alpine for dropdown -->
@@ -360,34 +371,20 @@ document.addEventListener('alpine:init', () => {
 
 ## Tailwind CSS
 
+Tailwind is loaded via the Play CDN — no CLI, no build step, no `tailwind.config.js` file. Configuration (custom colors, fonts, dark mode) lives in the base layout's `<head>` via `tailwind.config` inline script.
+
+```html
+<!-- in base layout <head> -->
+<script src="https://cdn.tailwindcss.com"></script>
+```
+
 Rules:
 
-- Use the Tailwind CLI in watch mode during development.
-- Write Tailwind classes directly in `.templ` files — the scanner picks them up.
+- Write Tailwind classes directly in `.templ` files.
 - Extract repeated patterns into templ components, not `@apply` rules.
-- Keep `input.css` minimal: only the `@tailwind` directives and rare custom rules.
-
-```css
-/* web/static/css/input.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-```javascript
-// tailwind.config.js
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-    content: [
-        "./web/templates/**/*.templ",
-        "./web/templates/**/*.html",
-    ],
-    theme: {
-        extend: {},
-    },
-    plugins: [],
-}
-```
+- Use semantic design tokens defined in the `web-design-guide` skill (e.g. `bg-surface-card`, `text-content`).
+- The full palette, typography scale, layout conventions, and component patterns are in `.pi/skills/web-design-guide/` — read it before any UI work.
+- Dark mode uses Tailwind's `class` strategy — toggled by adding/removing `dark` on `<html>`.
 
 ---
 
@@ -651,9 +648,6 @@ templ generate
 # Run migrations
 migrate -path sql/migrations -database "$DATABASE_URL" up
 
-# Build Tailwind CSS
-npx tailwindcss -i web/static/css/input.css -o web/static/css/output.css --watch
-
 # Run tests
 go test ./...
 
@@ -666,7 +660,7 @@ go test -race -cover ./...
 ## Makefile
 
 ```makefile
-.PHONY: dev build test lint generate tailwind migrate
+.PHONY: dev build test lint generate migrate
 
 dev:
 	air
@@ -684,9 +678,6 @@ lint:
 generate:
 	sqlc generate
 	templ generate
-
-tailwind:
-	npx tailwindcss -i web/static/css/input.css -o web/static/css/output.css --watch
 
 migrate-up:
 	migrate -path sql/migrations -database "$(DATABASE_URL)" up
