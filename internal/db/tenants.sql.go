@@ -12,10 +12,9 @@ import (
 )
 
 const createTenant = `-- name: CreateTenant :one
-
 INSERT INTO tenants (id, name)
 VALUES ($1, $2)
-RETURNING id, name, status, settings, created_at, updated_at
+RETURNING id, name, status, settings, created_at, updated_at, monthly_budget_usd
 `
 
 type CreateTenantParams struct {
@@ -23,7 +22,6 @@ type CreateTenantParams struct {
 	Name string `json:"name"`
 }
 
-// Tenant queries for the control plane / tenant module.
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error) {
 	row := q.db.QueryRow(ctx, createTenant, arg.ID, arg.Name)
 	var i Tenant
@@ -34,12 +32,13 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Settings,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MonthlyBudgetUsd,
 	)
 	return i, err
 }
 
 const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, name, status, settings, created_at, updated_at
+SELECT id, name, status, settings, created_at, updated_at, monthly_budget_usd
 FROM tenants
 WHERE id = $1
 `
@@ -54,12 +53,13 @@ func (q *Queries) GetTenantByID(ctx context.Context, id string) (Tenant, error) 
 		&i.Settings,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MonthlyBudgetUsd,
 	)
 	return i, err
 }
 
 const listTenantsByUser = `-- name: ListTenantsByUser :many
-SELECT t.id, t.name, t.status, t.settings, t.created_at, t.updated_at
+SELECT t.id, t.name, t.status, t.settings, t.created_at, t.updated_at, t.monthly_budget_usd
 FROM tenants t
 JOIN tenant_memberships tm ON tm.tenant_id = t.id
 WHERE tm.user_id = $1
@@ -82,6 +82,7 @@ func (q *Queries) ListTenantsByUser(ctx context.Context, userID uuid.UUID) ([]Te
 			&i.Settings,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MonthlyBudgetUsd,
 		); err != nil {
 			return nil, err
 		}
