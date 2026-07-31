@@ -49,7 +49,40 @@ templ SelectTenant(tenants []domain.Tenant, csrfToken string, flashes []webui.Fl
 				</div>
 			}
 
-			<div class="mt-6 pt-6 border-t border-border">
+			<div class="mt-6 pt-6 border-t border-border space-y-4">
+				// Create workspace form.
+				<div>
+					<p class="text-sm text-content-secondary mb-2">Or create a new workspace:</p>
+					<form
+						hx-post="/create-tenant"
+						hx-target="#tenant-error"
+						hx-swap="innerHTML"
+						class="flex gap-2"
+					>
+						<input type="hidden" name="_csrf" value={ csrfToken }/>
+						<input
+							type="text"
+							name="name"
+							placeholder="Workspace name"
+							required
+							class="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+						/>
+						<button
+							type="submit"
+							class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+						>
+							<span class="htmx-indicator:hidden">Create</span>
+							<span class="htmx-indicator:flex hidden items-center gap-1">
+								<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+								</svg>
+								Creating…
+							</span>
+						</button>
+					</form>
+				</div>
+
 				<form hx-post="/logout" hx-target="#tenant-error" hx-swap="innerHTML">
 					<input type="hidden" name="_csrf" value={ csrfToken }/>
 					<button

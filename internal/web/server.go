@@ -77,6 +77,7 @@ func (s *Server) Register(e *echo.Group) {
 	)
 	authOnly.GET("/select-tenant", s.authHandler.selectTenantPage)
 	authOnly.POST("/select-tenant", s.authHandler.selectTenantSubmit)
+	authOnly.POST("/create-tenant", s.authHandler.createTenantSubmit)
 	authOnly.POST("/logout", s.authHandler.logout)
 
 	// Authenticated web routes (JWT + tenant required).

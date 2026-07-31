@@ -178,6 +178,43 @@ func (h *AuthHandler) clearCookies(c echo.Context) {
 	})
 }
 
+// createTenantSubmit processes the "create workspace" form from the
+// select-tenant page. On success it sets the tenant cookie and redirects
+// to /dashboard.
+func (h *AuthHandler) createTenantSubmit(c echo.Context) error {
+	name := c.FormValue("name")
+	if name == "" {
+		return h.authError(c, "Workspace name is required")
+	}
+
+	userID := auth.GetUserID(c.Request().Context())
+
+	t, err := h.tenantService.Create(c.Request().Context(), userID, name)
+	if err != nil {
+		return h.authError(c, h.mapTenantError(err))
+	}
+
+	h.setTenantCookie(c, string(t.ID))
+
+	if IsHTMX(c) {
+		c.Response().Header().Set("HX-Redirect", "/dashboard")
+		return c.NoContent(http.StatusOK)
+	}
+	return c.Redirect(http.StatusSeeOther, "/dashboard")
+}
+
+// mapTenantError converts a tenant service error to a user-facing message.
+func (h *AuthHandler) mapTenantError(err error) string {
+	switch {
+	case errors.Is(err, tenant.ErrInvalidName):
+		return "Please enter a valid workspace name"
+	case errors.Is(err, tenant.ErrAlreadyExists):
+		return "A workspace with that name already exists"
+	default:
+		return "Failed to create workspace"
+	}
+}
+
 // authError returns an error fragment for HTMX or redirects with flash.
 func (h *AuthHandler) authError(c echo.Context, message string) error {
 	if IsHTMX(c) {
