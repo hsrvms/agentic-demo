@@ -22,3 +22,51 @@ type DashboardData struct {
 	BudgetIntent    string
 	BudgetExceeded  bool
 }
+
+// SourceItem is a single row in the sources list table.
+type SourceItem struct {
+	ID             string
+	Name           string
+	SourceType     string
+	SourceLabel    string
+	Status         string
+	StatusIntent   string // "success", "warning", "error", "muted"
+	LastSyncAt     string
+	LastSyncStatus string
+}
+
+// SourcesListData is the view model for the sources list page.
+type SourcesListData struct {
+	TenantName string
+	Sources    []SourceItem
+	TotalCount int
+	Page       int
+	PageSize   int
+	HasMore    bool
+	NextPage   int
+}
+
+// SourceTypeOption is an option in the source type selector.
+type SourceTypeOption struct {
+	Value string
+	Label string
+}
+
+// SourceFormData is the view model for the create/edit source form.
+type SourceFormData struct {
+	Editing     bool
+	SourceID    string
+	Name        string
+	SourceType  string
+	ConfigURL   string
+	ConfigAPIKey string
+	CSRFToken   string
+	TypeOptions []SourceTypeOption
+}
+
+// SourceDetailData is the view model for the source detail page.
+type SourceDetailData struct {
+	Source         SourceItem
+	ConfigJSON     string
+	HasCredentials bool
+}

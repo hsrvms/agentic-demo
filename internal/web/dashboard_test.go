@@ -61,16 +61,29 @@ func (m *mockReportService) Delete(_ context.Context, _ uuid.UUID) error {
 }
 
 type mockSourceService struct {
-	page sources.DataSourcePage
-	err  error
+	page         sources.DataSourcePage
+	err          error
+	detailSource *sources.DataSource
+	detailErr    error
+	createResult sources.DataSource
+	createErr    error
+	updateResult sources.DataSource
+	updateErr    error
+	deleteErr    error
+	testResult   sources.ConnectionTestResult
+	testErr      error
+	syncErr      error
 }
 
 func (m *mockSourceService) Create(_ context.Context, _ *sources.CreateDataSourceParams) (sources.DataSource, error) {
-	return sources.DataSource{}, nil
+	return m.createResult, m.createErr
 }
 
 func (m *mockSourceService) GetByID(_ context.Context, _ uuid.UUID) (sources.DataSource, error) {
-	return sources.DataSource{}, nil
+	if m.detailSource != nil {
+		return *m.detailSource, m.detailErr
+	}
+	return sources.DataSource{}, m.detailErr
 }
 
 func (m *mockSourceService) ListByTenant(_ context.Context, _ string, _, _ int) (sources.DataSourcePage, error) {
@@ -78,19 +91,19 @@ func (m *mockSourceService) ListByTenant(_ context.Context, _ string, _, _ int) 
 }
 
 func (m *mockSourceService) Update(_ context.Context, _ uuid.UUID, _ sources.UpdateDataSourceParams) (sources.DataSource, error) {
-	return sources.DataSource{}, nil
+	return m.updateResult, m.updateErr
 }
 
 func (m *mockSourceService) Delete(_ context.Context, _ uuid.UUID) error {
-	return nil
+	return m.deleteErr
 }
 
 func (m *mockSourceService) TestConnection(_ context.Context, _ uuid.UUID) (sources.ConnectionTestResult, error) {
-	return sources.ConnectionTestResult{}, nil
+	return m.testResult, m.testErr
 }
 
 func (m *mockSourceService) Sync(_ context.Context, _ uuid.UUID) error {
-	return nil
+	return m.syncErr
 }
 
 type mockBudgetService struct {

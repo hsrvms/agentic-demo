@@ -1,0 +1,74 @@
+package pages
+
+// StatusFragment renders a connection test or sync result for HTMX partial updates.
+templ StatusFragment(success bool, message string, latency string) {
+	<div
+		class="rounded-lg border p-4 text-sm flex items-start gap-3"
+		if success {
+			class="border-intent-success/20 bg-intent-success/5"
+		} else {
+			class="border-intent-error/20 bg-intent-error/5"
+		}
+		x-data="{ visible: true }"
+		x-show="visible"
+		x-transition
+	>
+		if success {
+			<svg class="h-5 w-5 text-intent-success mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+			</svg>
+		} else {
+			<svg class="h-5 w-5 text-intent-error mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+			</svg>
+		}
+		<div class="flex-1">
+			<p
+				if success {
+					class="text-intent-success"
+				} else {
+					class="text-intent-error"
+				}
+			>
+				{ message }
+			</p>
+			if latency != "" {
+				<p class="text-content-muted mt-1">Latency: { latency }</p>
+			}
+		</div>
+		<button @click="visible = false" aria-label="Dismiss" class="text-content-muted hover:text-content transition-colors shrink-0">
+			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+			</svg>
+		</button>
+	</div>
+}
+
+// SyncTriggeredFragment renders a "sync triggered" status for HTMX.
+templ SyncTriggeredFragment() {
+	<div
+		class="rounded-lg border border-intent-info/20 bg-intent-info/5 p-4 text-sm flex items-start gap-3"
+		x-data="{ visible: true }"
+		x-show="visible"
+		x-transition
+	>
+		<svg class="h-5 w-5 text-intent-info mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+		</svg>
+		<div class="flex-1">
+			<p class="text-intent-info">Sync job has been queued. Data will be processed shortly.</p>
+		</div>
+		<button @click="visible = false" aria-label="Dismiss" class="text-content-muted hover:text-content transition-colors shrink-0">
+			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+			</svg>
+		</button>
+	</div>
+}
+
+// ErrorFragment renders an inline error message for HTMX form submissions.
+templ ErrorFragment(message string) {
+	<div class="rounded-lg border border-intent-error/20 bg-intent-error/5 p-3 text-sm text-intent-error" role="alert">
+		{ message }
+	</div>
+}
