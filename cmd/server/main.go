@@ -146,7 +146,9 @@ func main() {
 	budgetHandler.Register(api, tenantMw)
 
 	// Web (HTML) routes — cookie-based auth, CSRF, server-rendered pages.
-	webServer := web.NewServer(authService, tenantService)
+	webServer := web.NewServer(authService, tenantService,
+		web.WithDashboard(usageService, reportService, sourceService, budgetService),
+	)
 	webServer.Register(e.Group(""))
 
 	// Static files (embedded from web/static/).

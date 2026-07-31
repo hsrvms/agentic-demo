@@ -8,3 +8,17 @@ type Flash struct {
 	Intent  string // "success", "error", "warning", "info"
 	Message string
 }
+
+// DashboardData is the view model passed to the dashboard template.
+type DashboardData struct {
+	TenantName      string
+	TotalCostUSD    float64
+	CostFormatted   string
+	TotalTokens     int64
+	TokensFormatted string
+	ReportsCount    int
+	ActiveSources   int
+	BudgetPercent   float64
+	BudgetIntent    string
+	BudgetExceeded  bool
+}

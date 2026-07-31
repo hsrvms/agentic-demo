@@ -4,17 +4,22 @@ import (
 	"net/http"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/reports"
+	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/tenant"
+	"github.com/agentic-demo/platform/internal/usage"
 	webpages "github.com/agentic-demo/platform/web/templates/pages"
 	"github.com/labstack/echo/v4"
 )
 
 // Server holds the web (HTML) route group and its dependencies.
 type Server struct {
-	authHandler   *AuthHandler
-	authService   auth.AuthService
-	tenantService tenant.TenantService
-	secureCookies bool
+	authHandler      *AuthHandler
+	dashboardHandler *DashboardHandler
+	authService      auth.AuthService
+	tenantService    tenant.TenantService
+	secureCookies    bool
 }
 
 // ServerOption configures the web server.
@@ -24,6 +29,18 @@ type ServerOption func(*Server)
 func WithSecureCookies() ServerOption {
 	return func(s *Server) {
 		s.secureCookies = true
+	}
+}
+
+// WithDashboard wires the dashboard handler with its service dependencies.
+func WithDashboard(
+	usageService usage.UsageService,
+	reportService reports.ReportService,
+	sourceService sources.Service,
+	budgetService budget.BudgetService,
+) ServerOption {
+	return func(s *Server) {
+		s.dashboardHandler = NewDashboardHandler(usageService, reportService, sourceService, budgetService)
 	}
 }
 
@@ -70,7 +87,7 @@ func (s *Server) Register(e *echo.Group) {
 	)
 
 	authGroup.GET("/", s.homePage)
-	authGroup.GET("/dashboard", s.homePage)
+	authGroup.GET("/dashboard", s.dashboardOrHome)
 }
 
 // FlashMiddleware reads flash cookies on GET requests and injects them
@@ -95,4 +112,13 @@ func FlashMiddleware() echo.MiddlewareFunc {
 func (s *Server) homePage(c echo.Context) error {
 	flashes := GetFlashMessages(c.Request().Context())
 	return Render(c, http.StatusOK, webpages.Home(flashes))
+}
+
+// dashboardOrHome delegates to the DashboardHandler if wired, otherwise
+// falls back to the generic home page.
+func (s *Server) dashboardOrHome(c echo.Context) error {
+	if s.dashboardHandler != nil {
+		return s.dashboardHandler.dashboardPage(c)
+	}
+	return s.homePage(c)
 }

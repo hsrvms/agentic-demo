@@ -7,6 +7,7 @@ templ Navbar() {
 				<div class="flex items-center gap-8">
 					<a href="/" class="text-xl font-bold text-primary">Platform</a>
 					<div class="hidden sm:flex items-center gap-1">
+						<a href="/dashboard" class="px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page transition-colors">Dashboard</a>
 						<a href="/sources" class="px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page transition-colors">Sources</a>
 						<a href="/reports" class="px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page transition-colors">Reports</a>
 						<a href="/settings" class="px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page transition-colors">Settings</a>
@@ -24,6 +25,7 @@ templ Navbar() {
 		</div>
 		<div x-show="mobileOpen" x-transition class="sm:hidden border-t border-border">
 			<div class="px-4 py-3 space-y-1">
+				<a href="/dashboard" class="block px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page">Dashboard</a>
 				<a href="/sources" class="block px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page">Sources</a>
 				<a href="/reports" class="block px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page">Reports</a>
 				<a href="/settings" class="block px-3 py-2 rounded-lg text-sm font-medium text-content-secondary hover:text-content hover:bg-surface-page">Settings</a>
