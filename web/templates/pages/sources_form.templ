@@ -1,0 +1,222 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+import "fmt"
+
+templ SourceForm(data webui.SourceFormData, flashes []webui.Flash) {
+	@layouts.Base(SourceFormTitle(data.Editing), flashes) {
+		<div class="max-w-2xl mx-auto space-y-6">
+			<div>
+				<a href="/sources" class="text-sm text-primary hover:text-primary-hover transition-colors inline-flex items-center gap-1">
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+					</svg>
+					Back to Sources
+				</a>
+			</div>
+
+			<div class="bg-surface-card border border-border rounded-lg shadow-sm p-6">
+				<h1 class="text-2xl font-bold mb-6">{ SourceFormTitle(data.Editing) }</h1>
+
+				<div
+					x-data={ sourceFormAlpineData(data) }
+				>
+					<div id="source-form-error"></div>
+
+					<form
+						if data.Editing {
+							hx-put={ "/sources/" + data.SourceID }
+						} else {
+							hx-post="/sources"
+						}
+						hx-target="#source-form-error"
+						hx-swap="innerHTML"
+						@submit="submitted = true"
+						class="space-y-5"
+					>
+						<input type="hidden" name="_csrf" value={ data.CSRFToken }/>
+
+						// Name field.
+						<div class="space-y-1">
+							<label for="name" class="block text-sm font-medium text-content">
+								Name
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<input
+								id="name"
+								name="name"
+								type="text"
+								x-model="name"
+								required
+								placeholder="My Data Source"
+								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && nameError() ? 'border-intent-error' : 'border-border'"
+							/>
+							<p
+								x-show="submitted && nameError()"
+								x-text="nameError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Source type selector.
+						<div class="space-y-1">
+							<label for="source_type" class="block text-sm font-medium text-content">
+								Source Type
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<select
+								id="source_type"
+								name="source_type"
+								x-model="sourceType"
+								required
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && typeError() ? 'border-intent-error' : 'border-border'"
+							>
+								if !data.Editing {
+									<option value="">Select a type…</option>
+								}
+								for _, opt := range data.TypeOptions {
+									<option value={ opt.Value } selected={ opt.Value == data.SourceType }>{ opt.Label }</option>
+								}
+							</select>
+							<p
+								x-show="submitted && typeError()"
+								x-text="typeError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Type-specific: URL for website.
+						<div x-show="sourceType === 'website'" x-cloak class="space-y-1">
+							<label for="config_url" class="block text-sm font-medium text-content">
+								Website URL
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<input
+								id="config_url"
+								name="config_url"
+								type="url"
+								x-model="configURL"
+								placeholder="https://example.com"
+								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && urlError() ? 'border-intent-error' : 'border-border'"
+							/>
+							<p
+								x-show="submitted && urlError()"
+								x-text="urlError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Type-specific: API key for CRM.
+						<div
+							x-show="sourceType === 'crm_hubspot' || sourceType === 'crm_salesforce'"
+							x-cloak
+							class="space-y-1"
+						>
+							<label for="config_api_key" class="block text-sm font-medium text-content">
+								API Key
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<input
+								id="config_api_key"
+								name="config_api_key"
+								type="password"
+								x-model="configAPIKey"
+								placeholder="Enter your API key"
+								autocomplete="off"
+								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && apiKeyError() ? 'border-intent-error' : 'border-border'"
+							/>
+							<p
+								x-show="submitted && apiKeyError()"
+								x-text="apiKeyError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Actions.
+						<div class="flex items-center gap-3 pt-2">
+							<button
+								type="submit"
+								class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								x-bind:disabled="submitted && hasErrors"
+							>
+								<span class="htmx-indicator:hidden">
+									if data.Editing {
+										<span>Save Changes</span>
+									} else {
+										<span>Create Source</span>
+									}
+								</span>
+								<span class="htmx-indicator:flex hidden items-center gap-2">
+									<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+									</svg>
+									Saving…
+								</span>
+							</button>
+							<a
+								href="/sources"
+								class="inline-flex items-center justify-center rounded-lg border border-border bg-surface-card px-4 py-2 text-sm font-medium text-content shadow-sm hover:bg-surface-page focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+							>
+								Cancel
+							</a>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// SourceFormTitle returns the page title for the source form.
+func SourceFormTitle(editing bool) string {
+	if editing {
+		return "Edit Data Source"
+	}
+	return "Add Data Source"
+}
+
+// sourceFormAlpineData builds the Alpine.js x-data attribute string
+// with Go values safely injected.
+func sourceFormAlpineData(data webui.SourceFormData) string {
+	return fmt.Sprintf(`{
+		name: %q,
+		sourceType: %q,
+		configURL: %q,
+		configAPIKey: '',
+		submitted: false,
+		nameError() {
+			if (!this.name.trim()) return 'Name is required'
+			return ''
+		},
+		typeError() {
+			if (!this.sourceType) return 'Source type is required'
+			return ''
+		},
+		urlError() {
+			if (this.sourceType === 'website' && !this.configURL.trim()) return 'URL is required for website sources'
+			if (this.configURL && !this.configURL.match(/^https?:\/\/.+/)) return 'Enter a valid URL (http:// or https://)'
+			return ''
+		},
+		apiKeyError() {
+			if ((this.sourceType === 'crm_hubspot' || this.sourceType === 'crm_salesforce') && !this.configAPIKey.trim()) return 'API key is required for CRM sources'
+			return ''
+		},
+		get hasErrors() {
+			return this.nameError() !== '' || this.typeError() !== '' || this.urlError() !== '' || this.apiKeyError() !== ''
+		}
+	}`, data.Name, data.SourceType, data.ConfigURL)
+}

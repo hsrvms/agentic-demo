@@ -1,0 +1,192 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+import "fmt"
+
+templ SourcesList(data webui.SourcesListData, csrfToken string, flashes []webui.Flash) {
+	@layouts.Base("Data Sources", flashes) {
+		<div class="space-y-6">
+			<div class="flex items-center justify-between">
+				<div>
+					<h1 class="text-3xl font-bold tracking-tight">Data Sources</h1>
+					<p class="text-content-secondary mt-1">Connect and manage your data sources</p>
+				</div>
+				<a
+					href="/sources/new"
+					class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+					Add Source
+				</a>
+			</div>
+
+			if len(data.Sources) == 0 && data.Page == 1 {
+				@SourcesEmptyState()
+			} else {
+				<div class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Name</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Type</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Status</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Last Sync</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Actions</th>
+								</tr>
+							</thead>
+							<tbody id="sources-table-body">
+								for _, s := range data.Sources {
+									@SourceRow(s, csrfToken)
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				if data.HasMore {
+					<div
+						id="sources-pagination"
+						hx-get={ fmt.Sprintf("/sources?page=%d", data.NextPage) }
+						hx-trigger="revealed"
+						hx-target="#sources-table-body"
+						hx-swap="beforeend"
+					>
+						<div class="flex justify-center py-4">
+							<div class="htmx-indicator flex items-center gap-2 text-sm text-content-muted">
+								<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+								</svg>
+								Loading more…
+							</div>
+						</div>
+					</div>
+				}
+			}
+		</div>
+	}
+}
+
+templ SourcesEmptyState() {
+	<div class="flex flex-col items-center justify-center py-16 px-4 text-center">
+		<div class="text-content-muted mb-4">
+			<svg class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"/>
+			</svg>
+		</div>
+		<h3 class="text-lg font-medium text-content mb-1">No data sources yet</h3>
+		<p class="text-sm text-content-secondary mb-6 max-w-sm">Add your first data source to start ingesting data into the platform.</p>
+		<a
+			href="/sources/new"
+			class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+		>
+			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+			</svg>
+			Add Source
+		</a>
+	</div>
+}
+
+templ SourceRow(s webui.SourceItem, csrfToken string) {
+	<tr class="border-b border-border hover:bg-surface-page transition-colors">
+		<td class="py-3 px-4">
+			<a href={ "/sources/" + s.ID } class="text-content font-medium hover:text-primary transition-colors">{ s.Name }</a>
+		</td>
+		<td class="py-3 px-4 text-content-secondary">{ s.SourceLabel }</td>
+		<td class="py-3 px-4">
+			@StatusBadge(s.Status, s.StatusIntent)
+		</td>
+		<td class="py-3 px-4 text-content-secondary text-xs">
+			if s.LastSyncAt != "" {
+				<span>{ s.LastSyncAt }</span>
+				if s.LastSyncStatus != "" {
+					<br/>
+					<span class="text-content-muted">{ s.LastSyncStatus }</span>
+				}
+			} else {
+				<span class="text-content-muted">Never</span>
+			}
+		</td>
+		<td class="py-3 px-4 text-right">
+			<div class="inline-flex items-center gap-1">
+				<button
+					hx-post={ "/sources/" + s.ID + "/test" }
+					hx-target="#source-status"
+					hx-swap="innerHTML"
+					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+					aria-label={ "Test " + s.Name }
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+					</svg>
+					Test
+				</button>
+				<button
+					hx-post={ "/sources/" + s.ID + "/sync" }
+					hx-target="#source-status"
+					hx-swap="innerHTML"
+					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+					aria-label={ "Sync " + s.Name }
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+					</svg>
+					Sync
+				</button>
+				<a
+					href={ "/sources/" + s.ID + "/edit" }
+					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+					aria-label={ "Edit " + s.Name }
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+					</svg>
+					Edit
+				</a>
+				<button
+					hx-delete={ "/sources/" + s.ID }
+					hx-target="closest tr"
+					hx-swap="outerHTML"
+					hx-confirm="Delete this source? This cannot be undone."
+					hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-muted hover:text-intent-error hover:bg-intent-error/5 focus:ring-2 focus:ring-intent-error focus:ring-offset-2 transition-colors"
+					aria-label={ "Delete " + s.Name }
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+					</svg>
+					Delete
+				</button>
+			</div>
+		</td>
+	</tr>
+}
+
+templ StatusBadge(status string, intent string) {
+	<span
+		class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+		if intent == "success" {
+			class="bg-intent-success/10 text-intent-success"
+		} else if intent == "error" {
+			class="bg-intent-error/10 text-intent-error"
+		} else if intent == "warning" {
+			class="bg-intent-warning/10 text-intent-warning"
+		} else {
+			class="bg-content-muted/10 text-content-muted"
+		}
+	>
+		{ status }
+	</span>
+}
+
+// SourceRowsFragment renders just the table rows for HTMX pagination.
+templ SourceRowsFragment(sources []webui.SourceItem, csrfToken string) {
+	for _, s := range sources {
+		@SourceRow(s, csrfToken)
+	}
+}

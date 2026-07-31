@@ -148,6 +148,7 @@ func main() {
 	// Web (HTML) routes — cookie-based auth, CSRF, server-rendered pages.
 	webServer := web.NewServer(authService, tenantService,
 		web.WithDashboard(usageService, reportService, sourceService, budgetService),
+		web.WithSources(sourceService),
 	)
 	webServer.Register(e.Group(""))
 

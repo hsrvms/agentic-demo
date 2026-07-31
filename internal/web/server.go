@@ -17,6 +17,7 @@ import (
 type Server struct {
 	authHandler      *AuthHandler
 	dashboardHandler *DashboardHandler
+	sourcesHandler   *SourcesHandler
 	authService      auth.AuthService
 	tenantService    tenant.TenantService
 	secureCookies    bool
@@ -41,6 +42,13 @@ func WithDashboard(
 ) ServerOption {
 	return func(s *Server) {
 		s.dashboardHandler = NewDashboardHandler(usageService, reportService, sourceService, budgetService)
+	}
+}
+
+// WithSources wires the sources management handler.
+func WithSources(sourceService sources.Service) ServerOption {
+	return func(s *Server) {
+		s.sourcesHandler = NewSourcesHandler(sourceService)
 	}
 }
 
@@ -89,6 +97,11 @@ func (s *Server) Register(e *echo.Group) {
 
 	authGroup.GET("/", s.homePage)
 	authGroup.GET("/dashboard", s.dashboardOrHome)
+
+	// Sources management routes.
+	if s.sourcesHandler != nil {
+		s.sourcesHandler.Register(authGroup)
+	}
 }
 
 // FlashMiddleware reads flash cookies on GET requests and injects them
