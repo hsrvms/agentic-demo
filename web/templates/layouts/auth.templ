@@ -1,0 +1,130 @@
+package layouts
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/components"
+
+templ Auth(title string, flashes []webui.Flash) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } — Platform</title>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+			<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+			<script>
+				tailwind.config = {
+					darkMode: 'class',
+					theme: {
+						extend: {
+							colors: {
+								surface: {
+									page: 'var(--color-surface-page)',
+									card: 'var(--color-surface-card)',
+									raised: 'var(--color-surface-raised)',
+								},
+								content: {
+									DEFAULT: 'var(--color-content)',
+									secondary: 'var(--color-content-secondary)',
+									muted: 'var(--color-content-muted)',
+									inverse: 'var(--color-content-inverse)',
+								},
+								primary: {
+									DEFAULT: 'var(--color-primary)',
+									hover: 'var(--color-primary-hover)',
+									subtle: 'var(--color-primary-subtle)',
+									on: 'var(--color-primary-on)',
+								},
+								border: {
+									DEFAULT: 'var(--color-border)',
+									strong: 'var(--color-border-strong)',
+								},
+								intent: {
+									success: 'var(--color-intent-success)',
+									warning: 'var(--color-intent-warning)',
+									error: 'var(--color-intent-error)',
+									info: 'var(--color-intent-info)',
+								},
+							},
+							fontFamily: {
+								sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+								mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+							},
+						},
+					},
+				}
+			</script>
+			<style>
+				:root {
+					--color-surface-page: #f8fafc;
+					--color-surface-card: #ffffff;
+					--color-surface-raised: #ffffff;
+					--color-content: #0f172a;
+					--color-content-secondary: #475569;
+					--color-content-muted: #94a3b8;
+					--color-content-inverse: #ffffff;
+					--color-primary: #4f46e5;
+					--color-primary-hover: #4338ca;
+					--color-primary-subtle: #eef2ff;
+					--color-primary-on: #ffffff;
+					--color-border: #e2e8f0;
+					--color-border-strong: #cbd5e1;
+					--color-intent-success: #059669;
+					--color-intent-warning: #d97706;
+					--color-intent-error: #e11d48;
+					--color-intent-info: #0284c7;
+				}
+				.dark {
+					--color-surface-page: #020617;
+					--color-surface-card: #0f172a;
+					--color-surface-raised: #1e293b;
+					--color-content: #f1f5f9;
+					--color-content-secondary: #94a3b8;
+					--color-content-muted: #64748b;
+					--color-content-inverse: #020617;
+					--color-primary: #818cf8;
+					--color-primary-hover: #a5b4fc;
+					--color-primary-subtle: #1e1b4b;
+					--color-primary-on: #020617;
+					--color-border: #1e293b;
+					--color-border-strong: #334155;
+					--color-intent-success: #34d399;
+					--color-intent-warning: #fbbf24;
+					--color-intent-error: #fb7185;
+					--color-intent-info: #38bdf8;
+				}
+				[x-cloak] { display: none !important; }
+				.htmx-indicator { display: none; }
+				.htmx-request .htmx-indicator { display: inline-flex; }
+				.htmx-request.htmx-indicator { display: inline-flex; }
+			</style>
+			<script>
+				if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+					document.documentElement.classList.add('dark')
+				}
+			</script>
+		</head>
+		<body
+			class="bg-surface-page text-content font-sans antialiased min-h-screen flex items-center justify-center"
+			x-data="{ dark: localStorage.getItem('theme') === 'dark' }"
+			x-init="$watch('dark', v => { document.documentElement.classList.toggle('dark', v); localStorage.setItem('theme', v ? 'dark' : 'light') })"
+			x-bind:class="{ dark: dark }"
+		>
+			if len(flashes) > 0 {
+				<div class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm space-y-2">
+					for _, f := range flashes {
+						@components.FlashAlert(f.Intent, f.Message)
+					}
+				</div>
+			}
+
+			<div class="w-full max-w-sm mx-4">
+				{ children... }
+			</div>
+		</body>
+	</html>
+}
