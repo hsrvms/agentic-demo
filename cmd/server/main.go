@@ -28,6 +28,7 @@ import (
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/agentic-demo/platform/internal/usage"
+	"github.com/agentic-demo/platform/internal/web"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -143,6 +144,16 @@ func main() {
 	budgetService := budget.NewService(budgetRepo, usageReader, usageRepo)
 	budgetHandler := budget.NewHandler(budgetService)
 	budgetHandler.Register(api, tenantMw)
+
+	// Web (HTML) routes — cookie-based auth, CSRF, server-rendered pages.
+	webServer := web.NewServer(authService, tenantService)
+	webServer.Register(e.Group(""))
+
+	// Static files (embedded from web/static/).
+	e.GET("/static/*", web.StaticHandler())
+
+	// Set error handler that routes /api/* to JSON, everything else to web redirects.
+	e.HTTPErrorHandler = web.MakeErrorHandler(e.HTTPErrorHandler)
 
 	// Deferred cleanup.
 	defer usageReader.Close()

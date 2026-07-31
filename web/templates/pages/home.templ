@@ -1,0 +1,28 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+
+templ Home(flashes []webui.Flash) {
+	@layouts.Base("Dashboard", flashes) {
+		<div class="space-y-6">
+			<h1 class="text-3xl font-bold tracking-tight">Dashboard</h1>
+			<p class="text-content-secondary">Welcome to the platform. Select a section from the navigation to get started.</p>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+				<a href="/sources" class="block bg-surface-card border border-border rounded-lg shadow-sm p-6 hover:border-primary hover:shadow-md cursor-pointer transition-all">
+					<h3 class="text-lg font-medium text-content">Data Sources</h3>
+					<p class="text-sm text-content-secondary mt-1">Connect and manage your data sources</p>
+				</a>
+				<a href="/reports" class="block bg-surface-card border border-border rounded-lg shadow-sm p-6 hover:border-primary hover:shadow-md cursor-pointer transition-all">
+					<h3 class="text-lg font-medium text-content">Reports</h3>
+					<p class="text-sm text-content-secondary mt-1">View and generate strategic reports</p>
+				</a>
+				<a href="/settings" class="block bg-surface-card border border-border rounded-lg shadow-sm p-6 hover:border-primary hover:shadow-md cursor-pointer transition-all">
+					<h3 class="text-lg font-medium text-content">Settings</h3>
+					<p class="text-sm text-content-secondary mt-1">Configure your workspace preferences</p>
+				</a>
+			</div>
+		</div>
+	}
+}
