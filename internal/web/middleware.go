@@ -48,6 +48,8 @@ func CookieAuthMiddleware(authService auth.AuthService) echo.MiddlewareFunc {
 // (instead of the X-Tenant-ID header) and verifies membership.
 //
 // If the cookie is missing, it falls back to the X-Tenant-ID header.
+// If neither cookie nor header is present, it redirects to /select-tenant
+// so the user can choose or create a workspace.
 func CookieTenantMiddleware(tenantService tenant.TenantService) echo.MiddlewareFunc {
 	headerTenant := auth.TenantMiddleware(tenantService)
 
@@ -78,8 +80,13 @@ func CookieTenantMiddleware(tenantService tenant.TenantService) echo.MiddlewareF
 				return next(c)
 			}
 
-			// Fall back to header-based tenant (for API clients).
-			return headerTenant(next)(c)
+			// Fall back to X-Tenant-ID header (for API clients).
+			if c.Request().Header.Get("X-Tenant-ID") != "" {
+				return headerTenant(next)(c)
+			}
+
+			// Authenticated user with no tenant — redirect to workspace selection.
+			return c.Redirect(http.StatusSeeOther, "/select-tenant")
 		}
 	}
 }
