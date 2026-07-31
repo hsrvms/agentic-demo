@@ -132,9 +132,10 @@ func TestRedisReader_OldDataExcluded(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer client.Close()
 
-	// Set up a key from last month.
+	// Set up a key from last month. Use the 1st of the previous month
+	// to avoid month-boundary overflow (e.g., July 31 normalizes to July 1).
 	now := time.Now().UTC()
-	lastMonth := now.AddDate(0, -1, 0).Format("2006-01-02")
+	lastMonth := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 	require.NoError(t, client.HSet(context.Background(),
 		"usage:tenant-1:"+lastMonth+":qwen-max",
