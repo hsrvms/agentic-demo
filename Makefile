@@ -31,10 +31,14 @@ MIGRATE_DIR  := sql/migrations
 dev: dev-server
 
 dev-server:
-	$(ENV) air --build.cmd "go build -o $(SERVER_BIN) ./cmd/server" --build.bin "$(SERVER_BIN)"
+	air -c .air.server.toml
 
 dev-worker:
-	$(ENV) air --build.cmd "go build -o $(WORKER_BIN) ./cmd/worker" --build.bin "$(WORKER_BIN)"
+	air -c .air.worker.toml
+
+dev-all:
+	@echo "Starting server and worker in parallel..."
+	air -c .air.server.toml & air -c .air.worker.toml & wait
 
 # ── Build ───────────────────────────────────────────────────────────
 build: build-server build-worker
