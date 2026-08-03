@@ -40,6 +40,49 @@ func TestLoad_QueueDefaults(t *testing.T) {
 	}
 }
 
+func TestLoad_S3Defaults(t *testing.T) {
+	setMinimalEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	expected := struct {
+		endpoint, accessKey, secretKey, region, bucket string
+		useSSL                                         bool
+	}{
+		endpoint: "minio:9000", accessKey: "minioadmin", secretKey: "minioadmin",
+		region: "auto", bucket: "platform", useSSL: false,
+	}
+	if cfg.S3Endpoint != expected.endpoint || cfg.S3AccessKey != expected.accessKey ||
+		cfg.S3SecretKey != expected.secretKey || cfg.S3Region != expected.region ||
+		cfg.S3Bucket != expected.bucket || cfg.S3UseSSL != expected.useSSL {
+		t.Fatalf("unexpected S3 defaults: %+v", cfg)
+	}
+}
+
+func TestLoad_S3FromEnv(t *testing.T) {
+	setMinimalEnv(t)
+	t.Setenv("S3_ENDPOINT", "https://acct.r2.cloudflarestorage.com")
+	t.Setenv("S3_ACCESS_KEY_ID", "r2-access")
+	t.Setenv("S3_SECRET_ACCESS_KEY", "r2-secret")
+	t.Setenv("S3_REGION", "auto")
+	t.Setenv("S3_BUCKET", "knowledge")
+	t.Setenv("S3_USE_SSL", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.S3Endpoint != "https://acct.r2.cloudflarestorage.com" ||
+		cfg.S3AccessKey != "r2-access" || cfg.S3SecretKey != "r2-secret" ||
+		cfg.S3Region != "auto" || cfg.S3Bucket != "knowledge" || !cfg.S3UseSSL {
+		t.Fatalf("unexpected S3 env values: %+v", cfg)
+	}
+}
+
 func TestLoad_QueueFromEnv(t *testing.T) {
 	setMinimalEnv(t)
 	t.Setenv("QUEUE_CONCURRENCY", "20")
