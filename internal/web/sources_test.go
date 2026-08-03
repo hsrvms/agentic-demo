@@ -648,7 +648,8 @@ func TestBuildConfigAndCreds(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		config, creds := buildConfigAndCreds("website", c)
+		config, creds, err := buildConfigAndCreds("website", c)
+		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Nil(t, creds)
 
@@ -665,19 +666,21 @@ func TestBuildConfigAndCreds(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		config, creds := buildConfigAndCreds("crm_hubspot", c)
+		config, creds, err := buildConfigAndCreds("crm_hubspot", c)
+		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, []byte("test-key-123"), creds)
 	})
 
-	t.Run("file_upload", func(t *testing.T) {
+	t.Run("file_upload_no_file", func(t *testing.T) {
 		e := echo.New()
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources", http.NoBody)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEMultipartForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		config, creds := buildConfigAndCreds("file_upload", c)
-		assert.Nil(t, config)
-		assert.Nil(t, creds)
+		_, _, err := buildConfigAndCreds("file_upload", c)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "file is required")
 	})
 }
 

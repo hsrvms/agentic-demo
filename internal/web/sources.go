@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -148,7 +150,7 @@ func (h *SourcesHandler) EditForm(c echo.Context) error {
 	return Render(c, http.StatusOK, webpages.SourceForm(formData, flashes))
 }
 
-// Create handles POST /sources.
+// Create handles POST /sources (including multipart file uploads).
 func (h *SourcesHandler) Create(c echo.Context) error {
 	ctx := c.Request().Context()
 	tenantID := string(auth.GetTenantID(ctx))
@@ -156,7 +158,10 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 	name := c.FormValue("name")
 	sourceType := c.FormValue("source_type")
 
-	config, creds := buildConfigAndCreds(sourceType, c)
+	config, creds, err := buildConfigAndCreds(sourceType, c)
+	if err != nil {
+		return h.formError(c, err)
+	}
 
 	result, err := h.core.Create(ctx, tenantID, &sources.CreateDataSourceParams{
 		TenantID:    tenantID,
@@ -167,6 +172,16 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 	})
 	if err != nil {
 		return h.formError(c, err)
+	}
+
+	// File uploads redirect to the list with a processing flash.
+	if sources.SourceType(sourceType) == sources.SourceTypeFileUpload {
+		if IsHTMX(c) {
+			c.Response().Header().Set("HX-Redirect", "/sources")
+			return c.NoContent(http.StatusOK)
+		}
+		setFlashCookie(c, webui.Flash{Intent: "success", Message: "File uploaded, processing…"})
+		return c.Redirect(http.StatusSeeOther, "/sources")
 	}
 
 	if IsHTMX(c) {
@@ -193,7 +208,10 @@ func (h *SourcesHandler) Update(c echo.Context) error {
 		params.Name = &name
 	}
 
-	config, creds := buildConfigAndCreds(sourceType, c)
+	config, creds, err := buildConfigAndCreds(sourceType, c)
+	if err != nil {
+		return h.formError(c, err)
+	}
 	if len(config) > 0 {
 		params.Config = &config
 	}
@@ -297,25 +315,46 @@ func (h *SourcesHandler) formError(c echo.Context, err error) error {
 	return c.Redirect(http.StatusSeeOther, referer)
 }
 
-// buildConfigAndCreds extracts type-specific config and credentials from form values.
-func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMessage, credentials []byte) {
+// buildConfigAndCreds extracts type-specific config and credentials from form values
+// or multipart file uploads.
+func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMessage, credentials []byte, err error) {
 	switch sources.SourceType(sourceType) {
+	case sources.SourceTypeFileUpload:
+		file, ferr := c.FormFile("file")
+		if ferr != nil {
+			return nil, nil, fmt.Errorf("file is required")
+		}
+		src, ferr := file.Open()
+		if ferr != nil {
+			return nil, nil, fmt.Errorf("failed to open uploaded file")
+		}
+		defer src.Close()
+		content, ferr := io.ReadAll(src)
+		if ferr != nil {
+			return nil, nil, fmt.Errorf("failed to read uploaded file")
+		}
+		cfg := map[string]string{
+			"filename": file.Filename,
+			"size":     fmt.Sprintf("%d", file.Size),
+		}
+		raw, _ := json.Marshal(cfg)
+		return raw, content, nil
 	case sources.SourceTypeWebsite:
 		url := c.FormValue("config_url")
 		if url != "" {
 			cfg := map[string]string{"url": url}
 			raw, _ := json.Marshal(cfg)
-			return raw, nil
+			return raw, nil, nil
 		}
 	case sources.SourceTypeCRMHubSpot, sources.SourceTypeCRMSalesforce:
 		apiKey := c.FormValue("config_api_key")
 		if apiKey != "" {
 			cfg := map[string]string{"api_key": apiKey}
 			raw, _ := json.Marshal(cfg)
-			return raw, []byte(apiKey)
+			return raw, []byte(apiKey), nil
 		}
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // extractConfigURL pulls the URL from a website source's config JSON.
