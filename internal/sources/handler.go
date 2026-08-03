@@ -13,12 +13,12 @@ import (
 
 // Handler holds the dependencies for data source HTTP endpoints.
 type Handler struct {
-	service Service
+	core *HandlerCore
 }
 
 // NewHandler creates a data source Handler.
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(core *HandlerCore) *Handler {
+	return &Handler{core: core}
 }
 
 // Register wires data source routes under the given Echo group with the provided middleware.
@@ -51,7 +51,7 @@ func (h *Handler) Create(c echo.Context) error {
 		creds = []byte(req.Credentials)
 	}
 
-	ds, err := h.service.Create(c.Request().Context(), &CreateDataSourceParams{
+	result, err := h.core.Create(c.Request().Context(), tenantID, &CreateDataSourceParams{
 		TenantID:    tenantID,
 		SourceType:  SourceType(req.SourceType),
 		Name:        req.Name,
@@ -62,7 +62,7 @@ func (h *Handler) Create(c echo.Context) error {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusCreated, toResponse(&ds))
+	return c.JSON(http.StatusCreated, toResponse(&result.DataSource))
 }
 
 // List handles GET /api/sources.
@@ -72,7 +72,7 @@ func (h *Handler) List(c echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	pageSize, _ := strconv.Atoi(c.QueryParam("limit"))
 
-	result, err := h.service.ListByTenant(c.Request().Context(), tenantID, page, pageSize)
+	result, err := h.core.List(c.Request().Context(), tenantID, page, pageSize)
 	if err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
@@ -97,12 +97,12 @@ func (h *Handler) Get(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	ds, err := h.service.GetByID(c.Request().Context(), id)
+	result, err := h.core.Get(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusOK, toResponseWithCredentials(&ds))
+	return c.JSON(http.StatusOK, toResponseWithCredentials(&result.DataSource))
 }
 
 // Update handles PUT /api/sources/:id.
@@ -132,12 +132,12 @@ func (h *Handler) Update(c echo.Context) error {
 		params.Credentials = &creds
 	}
 
-	ds, err := h.service.Update(c.Request().Context(), id, params)
+	result, err := h.core.Update(c.Request().Context(), id, params)
 	if err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusOK, toResponse(&ds))
+	return c.JSON(http.StatusOK, toResponse(&result.DataSource))
 }
 
 // Delete handles DELETE /api/sources/:id.
@@ -147,7 +147,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if _, err := h.core.Delete(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
@@ -161,7 +161,7 @@ func (h *Handler) TestConnection(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	result, err := h.service.TestConnection(c.Request().Context(), id)
+	result, err := h.core.TestConnection(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
@@ -181,7 +181,7 @@ func (h *Handler) Sync(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	if err := h.service.Sync(c.Request().Context(), id); err != nil {
+	if _, err := h.core.Sync(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
