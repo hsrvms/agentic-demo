@@ -3,11 +3,9 @@ package web
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/sources"
@@ -60,7 +58,7 @@ func (h *SourcesHandler) List(c echo.Context) error {
 
 	items := make([]webui.SourceItem, len(result.Sources))
 	for i := range result.Sources {
-		items[i] = toSourceItem(&result.Sources[i])
+		items[i] = webui.MapSourceItem(&result.Sources[i])
 	}
 
 	csrf := GetCSRFToken(ctx)
@@ -73,14 +71,9 @@ func (h *SourcesHandler) List(c echo.Context) error {
 		return Render(c, http.StatusOK, webpages.SourceRowsFragment(items, csrf))
 	}
 
-	data := webui.SourcesListData{
-		Sources:    items,
-		TotalCount: result.TotalCount,
-		Page:       page,
-		PageSize:   sourcesPageSize,
-		HasMore:    hasMore,
-		NextPage:   nextPage,
-	}
+	data := webui.MapSourceList(result)
+	data.HasMore = hasMore
+	data.NextPage = nextPage
 
 	flashes := GetFlashMessages(ctx)
 	return Render(c, http.StatusOK, webpages.SourcesList(data, csrf, flashes))
@@ -93,7 +86,7 @@ func (h *SourcesHandler) NewForm(c echo.Context) error {
 
 	data := webui.SourceFormData{
 		CSRFToken:   csrf,
-		TypeOptions: sourceTypeOptions(),
+		TypeOptions: webui.SourceTypeOptions(),
 	}
 
 	return Render(c, http.StatusOK, webpages.SourceForm(data, flashes))
@@ -118,11 +111,7 @@ func (h *SourcesHandler) Detail(c echo.Context) error {
 	csrf := GetCSRFToken(c.Request().Context())
 	flashes := GetFlashMessages(c.Request().Context())
 
-	data := webui.SourceDetailData{
-		Source:         toSourceItem(&ds),
-		ConfigJSON:     prettyJSON(ds.Config),
-		HasCredentials: len(ds.Credentials) > 0,
-	}
+	data := webui.MapSourceDetail(&ds)
 
 	return Render(c, http.StatusOK, webpages.SourceDetail(data, csrf, flashes))
 }
@@ -153,7 +142,7 @@ func (h *SourcesHandler) EditForm(c echo.Context) error {
 		SourceType:  string(ds.SourceType),
 		ConfigURL:   extractConfigURL(ds.Config),
 		CSRFToken:   csrf,
-		TypeOptions: sourceTypeOptions(),
+		TypeOptions: webui.SourceTypeOptions(),
 	}
 
 	return Render(c, http.StatusOK, webpages.SourceForm(formData, flashes))
@@ -308,63 +297,6 @@ func (h *SourcesHandler) formError(c echo.Context, err error) error {
 	return c.Redirect(http.StatusSeeOther, referer)
 }
 
-// toSourceItem converts a domain DataSource to a view model SourceItem.
-func toSourceItem(ds *sources.DataSource) webui.SourceItem {
-	item := webui.SourceItem{
-		ID:          ds.ID.String(),
-		Name:        ds.Name,
-		SourceType:  string(ds.SourceType),
-		SourceLabel: sourceTypeLabel(ds.SourceType),
-		Status:      string(ds.Status),
-		StatusIntent: statusIntent(ds.Status),
-		LastSyncStatus: ds.LastSyncStatus,
-	}
-	if ds.LastSyncAt != nil {
-		item.LastSyncAt = formatTimeAgo(*ds.LastSyncAt)
-	}
-	return item
-}
-
-// statusIntent maps a source status to a design-system intent.
-func statusIntent(s sources.Status) string {
-	switch s {
-	case sources.StatusActive:
-		return "success"
-	case sources.StatusError:
-		return "error"
-	case sources.StatusInactive:
-		return "muted"
-	default:
-		return "muted"
-	}
-}
-
-// sourceTypeLabel returns a human-readable label for a source type.
-func sourceTypeLabel(t sources.SourceType) string {
-	switch t {
-	case sources.SourceTypeFileUpload:
-		return "File Upload"
-	case sources.SourceTypeWebsite:
-		return "Website"
-	case sources.SourceTypeCRMHubSpot:
-		return "HubSpot CRM"
-	case sources.SourceTypeCRMSalesforce:
-		return "Salesforce CRM"
-	default:
-		return string(t)
-	}
-}
-
-// sourceTypeOptions returns the available source types for the form selector.
-func sourceTypeOptions() []webui.SourceTypeOption {
-	return []webui.SourceTypeOption{
-		{Value: string(sources.SourceTypeFileUpload), Label: "File Upload"},
-		{Value: string(sources.SourceTypeWebsite), Label: "Website"},
-		{Value: string(sources.SourceTypeCRMHubSpot), Label: "HubSpot CRM"},
-		{Value: string(sources.SourceTypeCRMSalesforce), Label: "Salesforce CRM"},
-	}
-}
-
 // buildConfigAndCreds extracts type-specific config and credentials from form values.
 func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMessage, credentials []byte) {
 	switch sources.SourceType(sourceType) {
@@ -400,45 +332,3 @@ func extractConfigURL(config json.RawMessage) string {
 	return cfg.URL
 }
 
-// prettyJSON formats JSON for display.
-func prettyJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var v interface{}
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return string(raw)
-	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return string(raw)
-	}
-	return string(b)
-}
-
-// formatTimeAgo returns a human-readable "time ago" string.
-func formatTimeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		m := int(d.Minutes())
-		if m == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", m)
-	case d < 24*time.Hour:
-		h := int(d.Hours())
-		if h == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", h)
-	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	}
-}

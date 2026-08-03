@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -45,91 +44,41 @@ func (h *DashboardHandler) dashboardPage(c echo.Context) error {
 	tenantID := string(auth.GetTenantID(ctx))
 	tenantName := GetTenantName(ctx)
 
-	data := webui.DashboardData{
-		TenantName:      tenantName,
-		CostFormatted:   "$0.00",
-		TokensFormatted: "0",
-		BudgetIntent:    "success",
-	}
-
 	// Fetch usage data.
 	currentUsage, err := h.usageService.GetCurrentUsage(ctx, tenantID)
 	if err != nil {
 		log.Printf("dashboard: usage error: %v", err)
-	} else if currentUsage != nil {
-		data.TotalCostUSD = currentUsage.TotalCostUSD
-		data.TotalTokens = currentUsage.TotalInputTokens + currentUsage.TotalOutputTokens
-		data.CostFormatted = fmt.Sprintf("$%.2f", currentUsage.TotalCostUSD)
-		data.TokensFormatted = formatTokens(data.TotalTokens)
 	}
 
 	// Fetch reports count.
+	var reportsCount int
 	reportPage, err := h.reportService.ListByTenant(ctx, tenantID, 1, 1)
 	if err != nil {
 		log.Printf("dashboard: reports error: %v", err)
 	} else {
-		data.ReportsCount = reportPage.TotalCount
+		reportsCount = reportPage.TotalCount
 	}
 
 	// Fetch active sources count.
+	var activeSources int
 	sourcePage, err := h.sourceService.ListByTenant(ctx, tenantID, 1, 100)
 	if err != nil {
 		log.Printf("dashboard: sources error: %v", err)
 	} else {
-		data.ActiveSources = countActiveSources(sourcePage.Sources)
+		activeSources = webui.CountActiveSources(sourcePage.Sources)
 	}
 
 	// Fetch budget status.
 	budgetStatus, err := h.budgetService.GetBudgetStatus(ctx, domain.TenantID(tenantID))
 	if err != nil {
 		log.Printf("dashboard: budget error: %v", err)
-	} else if budgetStatus != nil {
-		data.BudgetPercent = budgetStatus.PercentUsed
-		data.BudgetIntent = BudgetIntent(budgetStatus.PercentUsed)
-		data.BudgetExceeded = budgetStatus.IsExceeded
 	}
+
+	data := webui.MapDashboard(currentUsage, reportsCount, activeSources, budgetStatus)
+	data.TenantName = tenantName
 
 	flashes := GetFlashMessages(c.Request().Context())
 	return Render(c, http.StatusOK, webpages.Dashboard(data, flashes))
-}
-
-// BudgetIntent returns the intent CSS class based on budget usage percentage.
-//
-//	green  (< 80%)  → "success"
-//	yellow (80–95%) → "warning"
-//	red    (> 95%)  → "error"
-func BudgetIntent(percent float64) string {
-	switch {
-	case percent > 95:
-		return "error"
-	case percent >= 80:
-		return "warning"
-	default:
-		return "success"
-	}
-}
-
-// formatTokens formats a token count for human-readable display.
-func formatTokens(n int64) string {
-	switch {
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
-	case n >= 1_000:
-		return fmt.Sprintf("%.1fK", float64(n)/1_000)
-	default:
-		return fmt.Sprintf("%d", n)
-	}
-}
-
-// countActiveSources counts sources with Status == "active".
-func countActiveSources(srcs []sources.DataSource) int {
-	n := 0
-	for i := range srcs {
-		if srcs[i].Status == sources.StatusActive {
-			n++
-		}
-	}
-	return n
 }
 
 
