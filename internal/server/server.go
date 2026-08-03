@@ -83,7 +83,8 @@ func New(cfg config.Config) (*Server, error) {
 	tenant.NewHandler(tenantService).Register(api, authMw)
 
 	scheduleService := scheduling.NewService(scheduling.NewRepository(queries))
-	scheduling.NewHandler(scheduleService).Register(api, tenantMw)
+	scheduleCore := scheduling.NewHandlerCore(scheduleService)
+	scheduling.NewHandler(scheduleCore).Register(api, tenantMw)
 
 	reportService := reports.NewService(reports.NewRepository(queries))
 	reports.NewHandler(reportService).Register(api, tenantMw)
