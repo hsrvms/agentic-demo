@@ -58,7 +58,7 @@ func TestWebErrorHandler_HTMXRequest(t *testing.T) {
 	webErrorHandler(auth.ErrInvalidCredentials, c)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Contains(t, rec.Body.String(), "sign in")
+	assert.Contains(t, rec.Body.String(), "invalid credentials")
 	assert.Equal(t, echo.MIMETextHTMLCharsetUTF8, rec.Header().Get(echo.HeaderContentType))
 }
 

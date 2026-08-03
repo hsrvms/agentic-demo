@@ -1,11 +1,11 @@
 package reports
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -36,7 +36,7 @@ func (h *Handler) List(c echo.Context) error {
 
 	result, err := h.service.ListByTenant(c.Request().Context(), tenantID, page, pageSize)
 	if err != nil {
-		return mapReportError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	type reportItem struct {
@@ -80,7 +80,7 @@ func (h *Handler) Get(c echo.Context) error {
 
 	r, err := h.service.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return mapReportError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	resp := map[string]interface{}{
@@ -105,15 +105,4 @@ func (h *Handler) Get(c echo.Context) error {
 
 func getTenantID(c echo.Context) string {
 	return string(auth.GetTenantID(c.Request().Context()))
-}
-
-func mapReportError(err error) *echo.HTTPError {
-	switch {
-	case errors.Is(err, ErrReportNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrInvalidTenantID):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
 }

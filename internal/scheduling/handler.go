@@ -1,10 +1,10 @@
 package scheduling
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -100,7 +100,7 @@ func (h *Handler) Create(c echo.Context) error {
 		Format:   req.Format,
 	})
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusCreated, scheduleResponse(&s))
@@ -125,7 +125,7 @@ func (h *Handler) Update(c echo.Context) error {
 		Format:   req.Format,
 	})
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, scheduleResponse(&s))
@@ -138,7 +138,7 @@ func (h *Handler) Delete(c echo.Context) error {
 	}
 
 	if err := h.service.Delete(c.Request().Context(), id); err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -152,7 +152,7 @@ func (h *Handler) Toggle(c echo.Context) error {
 
 	s, err := h.service.Toggle(c.Request().Context(), id)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, scheduleResponse(&s))
@@ -178,19 +178,3 @@ func scheduleResponse(s *ReportSchedule) map[string]interface{} {
 	}
 }
 
-func mapError(err error) *echo.HTTPError {
-	switch {
-	case errors.Is(err, ErrScheduleNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrScheduleAlreadyExists):
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
-	case errors.Is(err, ErrInvalidCronExpr):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidScheduleType):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidTenantID):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-}
