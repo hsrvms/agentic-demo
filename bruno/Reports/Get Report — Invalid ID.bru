@@ -1,0 +1,22 @@
+meta {
+  name: Get Report — Invalid ID
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/reports/not-a-uuid
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}
