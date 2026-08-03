@@ -22,6 +22,7 @@ import (
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
@@ -209,7 +210,7 @@ func registerHandler(authService auth.AuthService) echo.HandlerFunc {
 
 		user, err := authService.Register(c.Request().Context(), req.Email, req.Password)
 		if err != nil {
-			return mapAuthError(err)
+			return echo.NewHTTPError(httperr.MapHTTP(err))
 		}
 
 		token, err := authService.Login(c.Request().Context(), req.Email, req.Password)
@@ -234,7 +235,7 @@ func loginHandler(authService auth.AuthService) echo.HandlerFunc {
 
 		token, err := authService.Login(c.Request().Context(), req.Email, req.Password)
 		if err != nil {
-			return mapAuthError(err)
+			return echo.NewHTTPError(httperr.MapHTTP(err))
 		}
 
 		return c.JSON(http.StatusOK, map[string]string{
@@ -264,7 +265,7 @@ func createTenantHandler(tenantService tenant.TenantService) echo.HandlerFunc {
 
 		t, err := tenantService.Create(c.Request().Context(), userID, req.Name)
 		if err != nil {
-			return mapTenantError(err)
+			return echo.NewHTTPError(httperr.MapHTTP(err))
 		}
 
 		return c.JSON(http.StatusCreated, map[string]interface{}{
@@ -303,34 +304,5 @@ func listTenantsHandler(tenantService tenant.TenantService) echo.HandlerFunc {
 	}
 }
 
-// --- Error mapping ---
-
-func mapAuthError(err error) *echo.HTTPError {
-	switch err {
-	case auth.ErrUserExists:
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
-	case auth.ErrInvalidCredentials:
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
-	case auth.ErrInvalidEmail:
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case auth.ErrWeakPassword:
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-}
-
-func mapTenantError(err error) *echo.HTTPError {
-	switch err {
-	case tenant.ErrInvalidName:
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case tenant.ErrTenantNotFound:
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case tenant.ErrAlreadyExists:
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
-	case tenant.ErrInvalidRole:
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-}
+// mapAuthError and mapTenantError have been migrated to internal/httperr/mapper.go.
+// Use httperr.MapHTTP(err) instead.

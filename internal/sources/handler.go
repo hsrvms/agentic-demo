@@ -2,11 +2,11 @@ package sources
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -59,7 +59,7 @@ func (h *Handler) Create(c echo.Context) error {
 		Credentials: creds,
 	})
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusCreated, toResponse(&ds))
@@ -74,7 +74,7 @@ func (h *Handler) List(c echo.Context) error {
 
 	result, err := h.service.ListByTenant(c.Request().Context(), tenantID, page, pageSize)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	items := make([]map[string]interface{}, len(result.Sources))
@@ -99,7 +99,7 @@ func (h *Handler) Get(c echo.Context) error {
 
 	ds, err := h.service.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, toResponseWithCredentials(&ds))
@@ -134,7 +134,7 @@ func (h *Handler) Update(c echo.Context) error {
 
 	ds, err := h.service.Update(c.Request().Context(), id, params)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, toResponse(&ds))
@@ -148,7 +148,7 @@ func (h *Handler) Delete(c echo.Context) error {
 	}
 
 	if err := h.service.Delete(c.Request().Context(), id); err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -163,7 +163,7 @@ func (h *Handler) TestConnection(c echo.Context) error {
 
 	result, err := h.service.TestConnection(c.Request().Context(), id)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	status := http.StatusOK
@@ -182,7 +182,7 @@ func (h *Handler) Sync(c echo.Context) error {
 	}
 
 	if err := h.service.Sync(c.Request().Context(), id); err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusAccepted, map[string]string{
@@ -194,27 +194,6 @@ func (h *Handler) Sync(c echo.Context) error {
 
 func getTenantID(c echo.Context) string {
 	return string(auth.GetTenantID(c.Request().Context()))
-}
-
-func mapError(err error) *echo.HTTPError {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrInvalidTenantID):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidName):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidSourceType):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidConfig):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrEncryptionFailed):
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	case errors.Is(err, ErrDecryptionFailed):
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
 }
 
 func toResponse(ds *DataSource) map[string]interface{} {

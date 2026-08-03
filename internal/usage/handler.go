@@ -1,11 +1,11 @@
 package usage
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/agentic-demo/platform/internal/auth"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/labstack/echo/v4"
 )
 
@@ -35,7 +35,7 @@ func (h *Handler) GetSummary(c echo.Context) error {
 
 	summary, err := h.service.GetSummary(c.Request().Context(), tenantID, from, to)
 	if err != nil {
-		return mapUsageError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	models := make([]map[string]interface{}, len(summary.Models))
@@ -65,7 +65,7 @@ func (h *Handler) GetCurrent(c echo.Context) error {
 
 	current, err := h.service.GetCurrentUsage(c.Request().Context(), tenantID)
 	if err != nil {
-		return mapUsageError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	byModel := make([]map[string]interface{}, len(current.ByModel))
@@ -103,7 +103,7 @@ func (h *Handler) ListEvents(c echo.Context) error {
 
 	result, err := h.service.ListEvents(c.Request().Context(), tenantID, page, pageSize)
 	if err != nil {
-		return mapUsageError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	events := make([]map[string]interface{}, len(result.Events))
@@ -130,13 +130,3 @@ func getTenantID(c echo.Context) string {
 	return string(auth.GetTenantID(c.Request().Context()))
 }
 
-func mapUsageError(err error) *echo.HTTPError {
-	switch {
-	case errors.Is(err, ErrInvalidTenantID):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidDateRange):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
-}

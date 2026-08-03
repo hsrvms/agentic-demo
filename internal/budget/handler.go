@@ -1,12 +1,12 @@
 package budget
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/domain"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -34,7 +34,7 @@ func (h *Handler) GetBudgetStatus(c echo.Context) error {
 
 	status, err := h.service.GetBudgetStatus(c.Request().Context(), domain.TenantID(tenantID))
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, status)
@@ -49,7 +49,7 @@ func (h *Handler) ListInvoices(c echo.Context) error {
 
 	result, err := h.service.ListInvoices(c.Request().Context(), domain.TenantID(tenantID), page, pageSize)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	items := make([]map[string]interface{}, len(result.Invoices))
@@ -76,7 +76,7 @@ func (h *Handler) GetInvoice(c echo.Context) error {
 
 	inv, err := h.service.GetInvoice(c.Request().Context(), domain.TenantID(tenantID), id)
 	if err != nil {
-		return mapError(err)
+		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
 	return c.JSON(http.StatusOK, invoiceToResponse(&inv))
@@ -86,21 +86,6 @@ func (h *Handler) GetInvoice(c echo.Context) error {
 
 func getTenantID(c echo.Context) string {
 	return string(auth.GetTenantID(c.Request().Context()))
-}
-
-func mapError(err error) *echo.HTTPError {
-	switch {
-	case errors.Is(err, ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case errors.Is(err, ErrInvalidTenantID):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidBudget):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case errors.Is(err, ErrInvalidPeriod):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
-	}
 }
 
 func invoiceToResponse(inv *Invoice) map[string]interface{} {

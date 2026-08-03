@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/agentic-demo/platform/internal/auth"
-	"github.com/agentic-demo/platform/internal/tenant"
+	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/agentic-demo/platform/internal/webui"
 	"github.com/labstack/echo/v4"
 )
@@ -41,52 +40,14 @@ func webErrorHandler(err error, c echo.Context) {
 		return
 	}
 
-	code := http.StatusInternalServerError
-	message := "Something went wrong"
+	code, message := httperr.MapHTTP(err)
 
-	switch {
-	case errors.Is(err, auth.ErrInvalidCredentials),
-		errors.Is(err, auth.ErrInvalidToken):
-		code = http.StatusUnauthorized
-		message = "Please sign in to continue"
-
-	case errors.Is(err, auth.ErrUserExists):
-		code = http.StatusConflict
-		message = "An account with that email already exists"
-
-	case errors.Is(err, auth.ErrInvalidEmail),
-		errors.Is(err, auth.ErrWeakPassword):
-		code = http.StatusBadRequest
-		message = err.Error()
-
-	case errors.Is(err, auth.ErrUserNotFound):
-		code = http.StatusNotFound
-		message = "Account not found"
-
-	case errors.Is(err, tenant.ErrTenantNotFound):
-		code = http.StatusNotFound
-		message = "Tenant not found"
-
-	case errors.Is(err, tenant.ErrAlreadyExists):
-		code = http.StatusConflict
-		message = "Already a member of this tenant"
-
-	case errors.Is(err, tenant.ErrInvalidName),
-		errors.Is(err, tenant.ErrInvalidRole):
-		code = http.StatusBadRequest
-		message = err.Error()
-
-	case errors.Is(err, tenant.ErrMembershipNotFound):
-		code = http.StatusNotFound
-		message = "Membership not found"
-
-	default:
-		var he *echo.HTTPError
-		if errors.As(err, &he) {
-			code = he.Code
-			if s, ok := he.Message.(string); ok {
-				message = s
-			}
+	// If the error is an echo.HTTPError from a non-domain source, use its code/message.
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
+		code = he.Code
+		if s, ok := he.Message.(string); ok {
+			message = s
 		}
 	}
 
