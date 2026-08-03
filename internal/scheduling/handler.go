@@ -11,12 +11,12 @@ import (
 
 // Handler holds the dependencies for schedule HTTP endpoints.
 type Handler struct {
-	service ScheduleService
+	core *HandlerCore
 }
 
 // NewHandler creates a schedule Handler.
-func NewHandler(service ScheduleService) *Handler {
-	return &Handler{service: service}
+func NewHandler(core *HandlerCore) *Handler {
+	return &Handler{core: core}
 }
 
 // Register wires schedule routes under the given Echo group with the provided middleware.
@@ -48,40 +48,18 @@ type updateScheduleRequest struct {
 
 func (h *Handler) List(c echo.Context) error {
 	tenantID := getTenantID(c)
-	schedules, err := h.service.ListByTenant(c.Request().Context(), tenantID)
+
+	result, err := h.core.List(c.Request().Context(), tenantID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list schedules")
 	}
 
-	type response struct {
-		ID        string `json:"id"`
-		TenantID  string `json:"tenant_id"`
-		Type      string `json:"type"`
-		CronExpr  string `json:"cron_expr"`
-		Focus     string `json:"focus,omitempty"`
-		Format    string `json:"format"`
-		Enabled   bool   `json:"enabled"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
+	response := make([]map[string]interface{}, len(result.Schedules))
+	for i := range result.Schedules {
+		response[i] = scheduleResponse(&result.Schedules[i])
 	}
 
-	result := make([]response, len(schedules))
-	for i := range schedules {
-		s := &schedules[i]
-		result[i] = response{
-			ID:        s.ID.String(),
-			TenantID:  s.TenantID,
-			Type:      string(s.Type),
-			CronExpr:  s.CronExpr,
-			Focus:     s.Focus,
-			Format:    s.Format,
-			Enabled:   s.Enabled,
-			CreatedAt: s.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt: s.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-	}
-
-	return c.JSON(http.StatusOK, result)
+	return c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Create(c echo.Context) error {
@@ -92,7 +70,7 @@ func (h *Handler) Create(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	s, err := h.service.Create(c.Request().Context(), &CreateScheduleParams{
+	result, err := h.core.Create(c.Request().Context(), tenantID, &CreateScheduleParams{
 		TenantID: tenantID,
 		Type:     ScheduleType(req.Type),
 		CronExpr: req.CronExpr,
@@ -103,7 +81,7 @@ func (h *Handler) Create(c echo.Context) error {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusCreated, scheduleResponse(&s))
+	return c.JSON(http.StatusCreated, scheduleResponse(&result.Schedule))
 }
 
 func (h *Handler) Update(c echo.Context) error {
@@ -117,7 +95,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	s, err := h.service.Update(c.Request().Context(), &UpdateScheduleParams{
+	result, err := h.core.Update(c.Request().Context(), &UpdateScheduleParams{
 		ID:       id,
 		Type:     ScheduleType(req.Type),
 		CronExpr: req.CronExpr,
@@ -128,7 +106,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusOK, scheduleResponse(&s))
+	return c.JSON(http.StatusOK, scheduleResponse(&result.Schedule))
 }
 
 func (h *Handler) Delete(c echo.Context) error {
@@ -137,7 +115,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid schedule ID")
 	}
 
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if _, err := h.core.Delete(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
@@ -150,12 +128,12 @@ func (h *Handler) Toggle(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid schedule ID")
 	}
 
-	s, err := h.service.Toggle(c.Request().Context(), id)
+	result, err := h.core.Toggle(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(httperr.MapHTTP(err))
 	}
 
-	return c.JSON(http.StatusOK, scheduleResponse(&s))
+	return c.JSON(http.StatusOK, scheduleResponse(&result.Schedule))
 }
 
 // --- helpers ---
@@ -177,4 +155,3 @@ func scheduleResponse(s *ReportSchedule) map[string]interface{} {
 		"updated_at": s.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
-
