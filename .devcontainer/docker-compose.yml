@@ -20,10 +20,14 @@ services:
       PGPORT: "5432"
       PGUSER: app
       REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_USE_SSL: "false"
+      # S3-compatible object storage — the same vars select MinIO in dev and
+      # Cloudflare R2 / AWS S3 in production.
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_BUCKET: platform
+      S3_USE_SSL: "false"
     volumes:
       - ..:/workspace
       - type: bind

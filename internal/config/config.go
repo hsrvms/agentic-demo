@@ -49,34 +49,50 @@ type Config struct {
 
 	// Encryption key for data source credentials (AES-256-GCM, 32 bytes).
 	EncryptionKey string
+
+	// S3-compatible object storage (MinIO in development, Cloudflare R2 or
+	// AWS S3 in production). Only the endpoint, credentials, region, and SSL
+	// flag change between services.
+	S3Endpoint  string
+	S3AccessKey string
+	S3SecretKey string
+	S3Region    string
+	S3Bucket    string
+	S3UseSSL    bool
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		DatabaseURL:              getEnv("DATABASE_URL", "postgres://platform:platform@localhost:5432/platform?sslmode=disable"),
-		RedisURL:                 getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		DashScopeAPIKey:          getEnv("DASHSCOPE_API_KEY", ""),
-		DashScopeBaseURL:         getEnv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-		DashScopeEmbeddingAPIKey: getEnv("DASHSCOPE_EMBEDDING_API_KEY", getEnv("DASHSCOPE_API_KEY", "")),
+		DatabaseURL:               getEnv("DATABASE_URL", "postgres://platform:platform@localhost:5432/platform?sslmode=disable"),
+		RedisURL:                  getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		DashScopeAPIKey:           getEnv("DASHSCOPE_API_KEY", ""),
+		DashScopeBaseURL:          getEnv("DASHSCOPE_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+		DashScopeEmbeddingAPIKey:  getEnv("DASHSCOPE_EMBEDDING_API_KEY", getEnv("DASHSCOPE_API_KEY", "")),
 		DashScopeEmbeddingBaseURL: getEnv("DASHSCOPE_EMBEDDING_BASE_URL", "https://dashscope-intl.aliyuncs.com/api/v1"),
-		LLMModel:                 getEnv("LLM_MODEL", "qwen-max"),
-		EmbeddingModel:           getEnv("EMBEDDING_MODEL", "text-embedding-v4"),
-		MaxToolCalls:             getEnvInt("MAX_TOOL_CALLS", 10),
-		MaxLLMCalls:              getEnvInt("MAX_LLM_CALLS", 15),
-		MaxExecutionMinutes:      getEnvInt("MAX_EXECUTION_MINUTES", 10),
-		JWTSecret:                getEnv("JWT_SECRET", "dev-secret-change-in-production"),
-		QueueConcurrency:         getEnvInt("QUEUE_CONCURRENCY", 10),
-		QueueMaxRetry:            getEnvInt("QUEUE_MAX_RETRY", 3),
-		QueueIngestionWeight:     getEnvInt("QUEUE_INGESTION_WEIGHT", 3),
-		QueueReportWeight:        getEnvInt("QUEUE_REPORT_WEIGHT", 2),
-		QueueDeliveryWeight:      getEnvInt("QUEUE_DELIVERY_WEIGHT", 1),
-		MaxActiveJobsPerTenant:   getEnvInt("MAX_ACTIVE_JOBS_PER_TENANT", 3),
-		SMTPHost:                 getEnv("SMTP_HOST", ""),
-		SMTPPort:                 getEnvInt("SMTP_PORT", 587),
-		SMTPUsername:             getEnv("SMTP_USERNAME", ""),
-		SMTPPassword:             getEnv("SMTP_PASSWORD", ""),
-		SMTPFrom:                 getEnv("SMTP_FROM", "noreply@platform.local"),
-		EncryptionKey:            getEnv("ENCRYPTION_KEY", "dev-encryption-key-change-in-prod!"),
+		LLMModel:                  getEnv("LLM_MODEL", "qwen-max"),
+		EmbeddingModel:            getEnv("EMBEDDING_MODEL", "text-embedding-v4"),
+		MaxToolCalls:              getEnvInt("MAX_TOOL_CALLS", 10),
+		MaxLLMCalls:               getEnvInt("MAX_LLM_CALLS", 15),
+		MaxExecutionMinutes:       getEnvInt("MAX_EXECUTION_MINUTES", 10),
+		JWTSecret:                 getEnv("JWT_SECRET", "dev-secret-change-in-production"),
+		QueueConcurrency:          getEnvInt("QUEUE_CONCURRENCY", 10),
+		QueueMaxRetry:             getEnvInt("QUEUE_MAX_RETRY", 3),
+		QueueIngestionWeight:      getEnvInt("QUEUE_INGESTION_WEIGHT", 3),
+		QueueReportWeight:         getEnvInt("QUEUE_REPORT_WEIGHT", 2),
+		QueueDeliveryWeight:       getEnvInt("QUEUE_DELIVERY_WEIGHT", 1),
+		MaxActiveJobsPerTenant:    getEnvInt("MAX_ACTIVE_JOBS_PER_TENANT", 3),
+		SMTPHost:                  getEnv("SMTP_HOST", ""),
+		SMTPPort:                  getEnvInt("SMTP_PORT", 587),
+		SMTPUsername:              getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:              getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:                  getEnv("SMTP_FROM", "noreply@platform.local"),
+		EncryptionKey:             getEnv("ENCRYPTION_KEY", "dev-encryption-key-change-in-prod!"),
+		S3Endpoint:                getEnv("S3_ENDPOINT", "minio:9000"),
+		S3AccessKey:               getEnv("S3_ACCESS_KEY_ID", "minioadmin"),
+		S3SecretKey:               getEnv("S3_SECRET_ACCESS_KEY", "minioadmin"),
+		S3Region:                  getEnv("S3_REGION", "auto"),
+		S3Bucket:                  getEnv("S3_BUCKET", "platform"),
+		S3UseSSL:                  getEnvBool("S3_USE_SSL", false),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -120,6 +136,18 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return defaultVal
+	}
+	return b
 }
 
 func getEnvInt(key string, defaultVal int) int {
