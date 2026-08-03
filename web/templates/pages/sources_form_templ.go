@@ -99,14 +99,14 @@ func SourceForm(data webui.SourceFormData, flashes []webui.Flash) templ.Componen
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " hx-target=\"#source-form-error\" hx-swap=\"innerHTML\" @submit=\"submitted = true\" class=\"space-y-5\"><input type=\"hidden\" name=\"_csrf\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " hx-target=\"#source-form-error\" hx-swap=\"innerHTML\" hx-encoding=\"multipart/form-data\" @submit=\"submitted = true\" class=\"space-y-5\"><input type=\"hidden\" name=\"_csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.CSRFToken)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 38, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 39, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -130,7 +130,7 @@ func SourceForm(data webui.SourceFormData, flashes []webui.Flash) templ.Componen
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 83, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 84, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 				if templ_7745c5c3_Err != nil {
@@ -143,7 +143,7 @@ func SourceForm(data webui.SourceFormData, flashes []webui.Flash) templ.Componen
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value == data.SourceType)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 83, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 84, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -156,7 +156,7 @@ func SourceForm(data webui.SourceFormData, flashes []webui.Flash) templ.Componen
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 83, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/sources_form.templ`, Line: 84, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -167,7 +167,7 @@ func SourceForm(data webui.SourceFormData, flashes []webui.Flash) templ.Componen
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select><p x-show=\"submitted && typeError()\" x-text=\"typeError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"sourceType === 'website'\" x-cloak class=\"space-y-1\"><label for=\"config_url\" class=\"block text-sm font-medium text-content\">Website URL <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"config_url\" name=\"config_url\" type=\"url\" x-model=\"configURL\" placeholder=\"https://example.com\" class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && urlError() ? 'border-intent-error' : 'border-border'\"><p x-show=\"submitted && urlError()\" x-text=\"urlError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"sourceType === 'crm_hubspot' || sourceType === 'crm_salesforce'\" x-cloak class=\"space-y-1\"><label for=\"config_api_key\" class=\"block text-sm font-medium text-content\">API Key <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"config_api_key\" name=\"config_api_key\" type=\"password\" x-model=\"configAPIKey\" placeholder=\"Enter your API key\" autocomplete=\"off\" class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && apiKeyError() ? 'border-intent-error' : 'border-border'\"><p x-show=\"submitted && apiKeyError()\" x-text=\"apiKeyError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div class=\"flex items-center gap-3 pt-2\"><button type=\"submit\" class=\"inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed\" x-bind:disabled=\"submitted && hasErrors\"><span class=\"htmx-indicator:hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select><p x-show=\"submitted && typeError()\" x-text=\"typeError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"sourceType === 'website'\" x-cloak class=\"space-y-1\"><label for=\"config_url\" class=\"block text-sm font-medium text-content\">Website URL <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"config_url\" name=\"config_url\" type=\"url\" x-model=\"configURL\" placeholder=\"https://example.com\" class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && urlError() ? 'border-intent-error' : 'border-border'\"><p x-show=\"submitted && urlError()\" x-text=\"urlError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"sourceType === 'crm_hubspot' || sourceType === 'crm_salesforce'\" x-cloak class=\"space-y-1\"><label for=\"config_api_key\" class=\"block text-sm font-medium text-content\">API Key <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"config_api_key\" name=\"config_api_key\" type=\"password\" x-model=\"configAPIKey\" placeholder=\"Enter your API key\" autocomplete=\"off\" class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && apiKeyError() ? 'border-intent-error' : 'border-border'\"><p x-show=\"submitted && apiKeyError()\" x-text=\"apiKeyError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"sourceType === 'file_upload'\" x-cloak class=\"space-y-1\"><label class=\"block text-sm font-medium text-content\">File <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label><div @dragover.prevent=\"dragOver = true\" @dragleave.prevent=\"dragOver = false\" @drop.prevent=\"handleFileDrop($event)\" class=\"relative\"><div class=\"border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer\" x-bind:class=\"dragOver ? 'border-primary bg-primary-subtle' : (submitted && fileError() ? 'border-intent-error' : 'border-border hover:border-primary/50')\" @click=\"$refs.fileInput.click()\"><template x-if=\"!fileName\"><div><svg class=\"mx-auto h-10 w-10 text-content-muted\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"1.5\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z\"></path></svg><p class=\"mt-2 text-sm text-content-secondary\"><span class=\"font-medium text-primary\">Click to upload</span> or drag and drop</p><p class=\"text-xs text-content-muted mt-1\">PDF, CSV, TXT, or DOCX up to 10MB</p></div></template><template x-if=\"fileName\"><div class=\"flex items-center gap-2 justify-center\"><svg class=\"h-5 w-5 text-content-muted shrink-0\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z\"></path></svg> <span class=\"text-sm font-medium\" x-text=\"fileName\"></span> <button type=\"button\" @click.stop=\"clearFile()\" class=\"text-content-muted hover:text-intent-error transition-colors\" aria-label=\"Remove file\"><svg class=\"h-4 w-4\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\" stroke-width=\"2\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M6 18L18 6M6 6l12 12\"></path></svg></button></div></template></div><input type=\"file\" x-ref=\"fileInput\" id=\"file\" name=\"file\" accept=\".pdf,.csv,.txt,.docx\" class=\"hidden\" @change=\"handleFileSelect($event)\"></div><p x-show=\"submitted && fileError()\" x-text=\"fileError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div class=\"flex items-center gap-3 pt-2\"><button type=\"submit\" class=\"inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed\" x-bind:disabled=\"submitted && hasErrors\"><span class=\"htmx-indicator:hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -213,6 +213,9 @@ func sourceFormAlpineData(data webui.SourceFormData) string {
 		configURL: %q,
 		configAPIKey: '',
 		submitted: false,
+		dragOver: false,
+		fileName: '',
+		fileErrorMsg: '',
 		nameError() {
 			if (!this.name.trim()) return 'Name is required'
 			return ''
@@ -230,8 +233,42 @@ func sourceFormAlpineData(data webui.SourceFormData) string {
 			if ((this.sourceType === 'crm_hubspot' || this.sourceType === 'crm_salesforce') && !this.configAPIKey.trim()) return 'API key is required for CRM sources'
 			return ''
 		},
+		fileError() {
+			if (this.sourceType !== 'file_upload') return ''
+			if (!this.fileName) return 'A file is required'
+			return this.fileErrorMsg
+		},
+		handleFileDrop(event) {
+			this.dragOver = false
+			const f = event.dataTransfer.files[0]
+			this.validateFile(f)
+		},
+		handleFileSelect(event) {
+			const f = event.target.files[0]
+			this.validateFile(f)
+		},
+		validateFile(f) {
+			this.fileErrorMsg = ''
+			this.fileName = ''
+			if (!f) return
+			const allowed = ['application/pdf', 'text/csv', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+			if (!allowed.includes(f.type)) {
+				this.fileErrorMsg = 'Invalid file type. Allowed: PDF, CSV, TXT, DOCX'
+				return
+			}
+			if (f.size > 10 * 1024 * 1024) {
+				this.fileErrorMsg = 'File too large. Maximum size is 10MB'
+				return
+			}
+			this.fileName = f.name
+		},
+		clearFile() {
+			this.fileName = ''
+			this.fileErrorMsg = ''
+			if (this.$refs.fileInput) this.$refs.fileInput.value = ''
+		},
 		get hasErrors() {
-			return this.nameError() !== '' || this.typeError() !== '' || this.urlError() !== '' || this.apiKeyError() !== ''
+			return this.nameError() !== '' || this.typeError() !== '' || this.urlError() !== '' || this.apiKeyError() !== '' || this.fileError() !== ''
 		}
 	}`, data.Name, data.SourceType, data.ConfigURL)
 }
