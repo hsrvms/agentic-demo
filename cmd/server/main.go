@@ -22,7 +22,6 @@ import (
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
-	"github.com/agentic-demo/platform/internal/httperr"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
@@ -88,23 +87,17 @@ func main() {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	// Public auth routes (no auth required).
+	// Auth and tenant handlers.
 	api := e.Group("/api")
-	authGroup := api.Group("/auth")
-	authGroup.POST("/register", registerHandler(authService))
-	authGroup.POST("/login", loginHandler(authService))
 
-	// Auth-only routes (JWT required, no tenant context needed).
-	// These are used for bootstrapping: creating the first tenant
-	// before any tenant membership exists.
-	// Per-route middleware avoids group prefix conflicts.
 	authMw := auth.AuthMiddleware(authService)
-	api.POST("/tenants", createTenantHandler(tenantService), authMw)
-	api.GET("/tenants", listTenantsHandler(tenantService), authMw)
-
-	// Tenant-scoped routes (JWT + X-Tenant-ID required).
 	tenantMw := auth.JWTMiddleware(authService, tenantService)
-	api.GET("/auth/me", meHandler, tenantMw)
+
+	authHandler := auth.NewHandler(authService)
+	authHandler.Register(api, tenantMw) // tenantMw only applied to /auth/me
+
+	tenantHandler := tenant.NewHandler(tenantService)
+	tenantHandler.Register(api, authMw) // authMw applied to all tenant routes
 
 	// Schedule routes (tenant-scoped).
 	scheduleHandler := scheduling.NewHandler(scheduleService)
@@ -183,126 +176,3 @@ func main() {
 	}
 }
 
-// --- Request/Response types ---
-
-type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type createTenantRequest struct {
-	Name string `json:"name"`
-}
-
-// --- Handlers ---
-
-func registerHandler(authService auth.AuthService) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var req registerRequest
-		if err := c.Bind(&req); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-		}
-
-		user, err := authService.Register(c.Request().Context(), req.Email, req.Password)
-		if err != nil {
-			return echo.NewHTTPError(httperr.MapHTTP(err))
-		}
-
-		token, err := authService.Login(c.Request().Context(), req.Email, req.Password)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to issue token after registration")
-		}
-
-		return c.JSON(http.StatusCreated, map[string]interface{}{
-			"user_id": user.ID,
-			"email":   user.Email,
-			"token":   token,
-		})
-	}
-}
-
-func loginHandler(authService auth.AuthService) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var req loginRequest
-		if err := c.Bind(&req); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-		}
-
-		token, err := authService.Login(c.Request().Context(), req.Email, req.Password)
-		if err != nil {
-			return echo.NewHTTPError(httperr.MapHTTP(err))
-		}
-
-		return c.JSON(http.StatusOK, map[string]string{
-			"token": token,
-		})
-	}
-}
-
-func meHandler(c echo.Context) error {
-	tenantID := auth.GetTenantID(c.Request().Context())
-	userID := auth.GetUserID(c.Request().Context())
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"user_id":   userID,
-		"tenant_id": tenantID,
-	})
-}
-
-func createTenantHandler(tenantService tenant.TenantService) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var req createTenantRequest
-		if err := c.Bind(&req); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-		}
-
-		userID := auth.GetUserID(c.Request().Context())
-
-		t, err := tenantService.Create(c.Request().Context(), userID, req.Name)
-		if err != nil {
-			return echo.NewHTTPError(httperr.MapHTTP(err))
-		}
-
-		return c.JSON(http.StatusCreated, map[string]interface{}{
-			"id":     t.ID,
-			"name":   t.Name,
-			"status": t.Status,
-		})
-	}
-}
-
-func listTenantsHandler(tenantService tenant.TenantService) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		userID := auth.GetUserID(c.Request().Context())
-
-		tenants, err := tenantService.ListByUser(c.Request().Context(), userID)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to list tenants")
-		}
-
-		type tenantResponse struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Status string `json:"status"`
-		}
-
-		result := make([]tenantResponse, len(tenants))
-		for i, t := range tenants {
-			result[i] = tenantResponse{
-				ID:     string(t.ID),
-				Name:   t.Name,
-				Status: string(t.Status),
-			}
-		}
-
-		return c.JSON(http.StatusOK, result)
-	}
-}
-
-// mapAuthError and mapTenantError have been migrated to internal/httperr/mapper.go.
-// Use httperr.MapHTTP(err) instead.
