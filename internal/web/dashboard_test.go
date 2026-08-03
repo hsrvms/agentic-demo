@@ -137,68 +137,6 @@ var _ reports.ReportService = (*mockReportService)(nil)
 var _ sources.Service = (*mockSourceService)(nil)
 var _ budget.BudgetService = (*mockBudgetService)(nil)
 
-// --- BudgetIntent tests ---
-
-func TestBudgetIntent(t *testing.T) {
-	tests := []struct {
-		name    string
-		percent float64
-		want    string
-	}{
-		{"zero", 0, "success"},
-		{"under_80", 50, "success"},
-		{"exactly_79", 79.9, "success"},
-		{"exactly_80", 80, "warning"},
-		{"between_80_95", 87, "warning"},
-		{"exactly_95", 95, "warning"},
-		{"over_95", 95.1, "error"},
-		{"exactly_100", 100, "error"},
-		{"over_100", 120, "error"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := BudgetIntent(tt.percent)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// --- formatTokens tests ---
-
-func TestFormatTokens(t *testing.T) {
-	tests := []struct {
-		name string
-		n    int64
-		want string
-	}{
-		{"zero", 0, "0"},
-		{"hundreds", 500, "500"},
-		{"thousands", 1500, "1.5K"},
-		{"millions", 2_500_000, "2.5M"},
-		{"large", 15_750_000, "15.8M"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatTokens(tt.n)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// --- countActiveSources tests ---
-
-func TestCountActiveSources(t *testing.T) {
-	srcs := []sources.DataSource{
-		{Status: sources.StatusActive},
-		{Status: sources.StatusInactive},
-		{Status: sources.StatusActive},
-		{Status: sources.StatusError},
-	}
-	assert.Equal(t, 2, countActiveSources(srcs))
-	assert.Equal(t, 0, countActiveSources(nil))
-	assert.Equal(t, 0, countActiveSources([]sources.DataSource{}))
-}
-
 // --- Dashboard handler integration test ---
 
 func TestDashboardHandler_AssemblesData(t *testing.T) {

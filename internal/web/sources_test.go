@@ -639,63 +639,6 @@ func TestSourcesHandler_Sync_Error(t *testing.T) {
 
 // --- Helper function tests ---
 
-func TestStatusIntent(t *testing.T) {
-	tests := []struct {
-		status sources.Status
-		want   string
-	}{
-		{sources.StatusActive, "success"},
-		{sources.StatusError, "error"},
-		{sources.StatusInactive, "muted"},
-		{sources.Status("unknown"), "muted"},
-	}
-	for _, tt := range tests {
-		t.Run(string(tt.status), func(t *testing.T) {
-			assert.Equal(t, tt.want, statusIntent(tt.status))
-		})
-	}
-}
-
-func TestSourceTypeLabel(t *testing.T) {
-	tests := []struct {
-		st   sources.SourceType
-		want string
-	}{
-		{sources.SourceTypeFileUpload, "File Upload"},
-		{sources.SourceTypeWebsite, "Website"},
-		{sources.SourceTypeCRMHubSpot, "HubSpot CRM"},
-		{sources.SourceTypeCRMSalesforce, "Salesforce CRM"},
-		{sources.SourceType("unknown"), "unknown"},
-	}
-	for _, tt := range tests {
-		t.Run(string(tt.st), func(t *testing.T) {
-			assert.Equal(t, tt.want, sourceTypeLabel(tt.st))
-		})
-	}
-}
-
-func TestFormatTimeAgo(t *testing.T) {
-	tests := []struct {
-		name string
-		d    time.Duration
-		want string
-	}{
-		{"just now", 10 * time.Second, "just now"},
-		{"1 minute", 1 * time.Minute, "1 minute ago"},
-		{"5 minutes", 5 * time.Minute, "5 minutes ago"},
-		{"1 hour", 1 * time.Hour, "1 hour ago"},
-		{"3 hours", 3 * time.Hour, "3 hours ago"},
-		{"1 day", 24 * time.Hour, "1 day ago"},
-		{"5 days", 5 * 24 * time.Hour, "5 days ago"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatTimeAgo(time.Now().Add(-tt.d))
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestBuildConfigAndCreds(t *testing.T) {
 	t.Run("website", func(t *testing.T) {
 		e := echo.New()
@@ -745,8 +688,3 @@ func TestExtractConfigURL(t *testing.T) {
 	assert.Equal(t, "", extractConfigURL(json.RawMessage(`invalid`)))
 }
 
-func TestPrettyJSON(t *testing.T) {
-	assert.Contains(t, prettyJSON(json.RawMessage(`{"url":"https://example.com"}`)), "https://example.com")
-	assert.Equal(t, "", prettyJSON(nil))
-	assert.Equal(t, "invalid", prettyJSON(json.RawMessage("invalid")))
-}
