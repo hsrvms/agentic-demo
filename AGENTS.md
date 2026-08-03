@@ -37,6 +37,59 @@ Frontend assets (Tailwind CSS, Alpine.js, HTMX) are loaded via CDN — no build 
 
 ---
 
+## Bruno API Testing
+
+[Bruno](https://www.usebruno.com/) is the API testing client. All requests live in
+`bruno/` as `.bru` files, organized by domain folder. The collection is versioned
+in git alongside the code.
+
+### When to update
+
+- **New endpoint** → add a folder with at least one happy-path request and one
+error-case request.
+- **Changed endpoint** → update the corresponding `.bru` files to match the new
+contract.
+- **Removed endpoint** → delete the `.bru` file and the folder if empty.
+
+### Folder structure
+
+```
+bruno/
+    bruno.json              # collection metadata
+    collection.bru          # collection name & auth mode
+    environments/
+        Agentic-Demo.bru    # environment variables (base_url, etc.)
+    Auth/                   # one folder per domain
+        folder.bru          # seq number for ordering
+        Login.bru
+        ...
+    Reports/
+        folder.bru
+        List Reports.bru
+        ...
+```
+
+Each domain folder has a `folder.bru` with a `meta { name, seq }` block. The
+`seq` field controls the folder order in Bruno's UI. New folders get the next
+available sequence number.
+
+### Request conventions
+
+- **Happy path**: tests the 200/201 response, validates all fields in the
+response body, and logs key data with `console.log`.
+- **Error cases**: at minimum, test the expected status code and error message
+shape. Follow the naming pattern `<Action> — <Error>` (e.g., `Get Report — Not
+Found`).
+- **Auth**: every request that requires auth includes both `Authorization:
+Bearer {{token}}` and `X-Tenant-ID: {{tenant_id}}` headers.
+- **Dynamic variables**: requests that depend on an ID created by a previous
+request use `{{var_name}}` placeholders (e.g., `{{report_id}}`). The script
+should skip assertions gracefully when the variable is not set.
+- **Assertions**: use Bruno's built-in `test`/`expect` API. Cover status code,
+response shape, and required fields.
+
+---
+
 ## Project Structure
 
 ```

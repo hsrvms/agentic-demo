@@ -1,0 +1,62 @@
+meta {
+  name: Get Report
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/reports/{{report_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  const status = res.getStatus();
+
+  // If report_id is not set, the request returns 400 (invalid UUID).
+  // Skip tests in that case — the user needs to set report_id first.
+  if (status === 400) {
+    console.log("Skipping: report_id variable not set. Run after generating a report.");
+    return;
+  }
+
+  test("Status code is 200", function () {
+    expect(status).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has correct id", function () {
+    expect(body.id).to.equal(bru.getVar("report_id"));
+  });
+  test("Response has tenant_id", function () {
+    expect(body.tenant_id).to.be.a("string");
+  });
+  test("Response has type", function () {
+    expect(body.type).to.be.a("string");
+  });
+  test("Response has title", function () {
+    expect(body.title).to.be.a("string");
+  });
+  test("Response has content", function () {
+    expect(body.content).to.be.a("string");
+  });
+  test("Response has citations", function () {
+    expect(body.citations).to.be.an("array");
+  });
+  test("Response has focus", function () {
+    expect(body.focus).to.be.a("string");
+  });
+  test("Response has generated_at", function () {
+    expect(body.generated_at).to.be.a("string");
+  });
+  test("Response has created_at", function () {
+    expect(body.created_at).to.be.a("string");
+  });
+
+  console.log("Got report:", body.id, body.type, body.title);
+}

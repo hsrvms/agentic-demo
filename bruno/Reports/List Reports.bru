@@ -1,0 +1,48 @@
+meta {
+  name: List Reports
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/reports
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+  X-Tenant-ID: {{tenant_id}}
+}
+
+script:post-response {
+  test("Status code is 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  const body = res.getBody();
+  test("Response has reports array", function () {
+    expect(body.reports).to.be.an("array");
+  });
+  test("Response has total_count", function () {
+    expect(body.total_count).to.be.a("number");
+  });
+  test("Response has page", function () {
+    expect(body.page).to.be.a("number");
+  });
+  test("Response has page_size", function () {
+    expect(body.page_size).to.be.a("number");
+  });
+
+  test("Report items have required fields", function () {
+    body.reports.forEach(function (r) {
+      expect(r.id).to.be.a("string");
+      expect(r.type).to.be.a("string");
+      expect(r.title).to.be.a("string");
+      expect(r.generated_at).to.be.a("string");
+    });
+  });
+
+  console.log("Report count:", body.reports.length);
+  console.log("Page:", body.page, "/", Math.ceil(body.total_count / body.page_size));
+}

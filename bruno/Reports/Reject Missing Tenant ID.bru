@@ -1,0 +1,21 @@
+meta {
+  name: Reject Missing Tenant ID
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/api/reports
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 400", function () {
+    expect(res.getStatus()).to.equal(400);
+  });
+}
