@@ -4,11 +4,11 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/config"
+	"github.com/agentic-demo/platform/internal/testutil"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +17,7 @@ func TestServer_StartsHealthAndRoutes(t *testing.T) {
 	redisServer := miniredis.RunT(t)
 
 	cfg := config.Config{
-		DatabaseURL:   databaseURLForTest(),
+		DatabaseURL:   testutil.StartPostgres(t),
 		RedisURL:      redisServer.Addr(),
 		JWTSecret:     "test-jwt-secret",
 		EncryptionKey: "test-encryption-key",
@@ -72,13 +72,6 @@ func TestServer_StartsHealthAndRoutes(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("server did not stop after shutdown")
 	}
-}
-
-func databaseURLForTest() string {
-	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		return databaseURL
-	}
-	return "postgres://platform:platform@localhost:5432/platform?sslmode=disable"
 }
 
 func waitForAddress(t *testing.T, srv *Server) string {
