@@ -10,7 +10,7 @@ Companies need strategic decision support — daily, weekly, and monthly reports
 
 A multi-tenant platform where a company signs up, connects their data sources, and receives AI-generated strategic reports on a schedule. The platform handles ingestion, knowledge base construction, AI reasoning with tool use, and report delivery. Companies interact through a web UI to configure data sources, set report schedules, and view generated reports.
 
-The platform is designed for a 3-person engineering team to build and operate.
+The platform is designed to be built and operated by a small engineering team.
 
 ## User Stories
 
@@ -79,17 +79,17 @@ The platform is designed for a 3-person engineering team to build and operate.
 
 **Why Go?** The job queue workers are the system's backbone — long-running, concurrent, memory-sensitive processes. Go excels at exactly this: goroutines cost ~2KB each (vs Python process), startup is <10ms, workers peak at 50-100MB, and a single static binary deploys with no venv or dependency management. The LLM and embedding providers both have Go SDKs (DashScope has `casibase/dashscope-go-sdk`, plus the API is OpenAI-compatible). The AI/ML ecosystem advantage of Python (sentence-transformers, HuggingFace) doesn't apply here — we're not training models; we're calling APIs over HTTP. With Go, the whole stack compiles to a single binary per service.
 
-**Web framework: Echo, not bare `net/http` + `chi`.** `labstack/echo` is a batteries-included web framework with built-in routing, middleware composition, request binding, validation, and OpenAPI generation via `swaggo/swag`. For a 3-person team building a CRUD-heavy + HTMX app, Echo removes more boilerplate than `chi` (which is intentionally minimal). The tradeoff is slightly more abstraction vs. the stdlib, but Echo is widely adopted and the team is unlikely to outgrow it.
+**Web framework: Echo, not bare `net/http` + `chi`.** `labstack/echo` is a batteries-included web framework with built-in routing, middleware composition, request binding, validation, and OpenAPI generation via `swaggo/swag`. For a CRUD-heavy + HTMX app, Echo removes more boilerplate than `chi` (which is intentionally minimal). The tradeoff is slightly more abstraction vs. the stdlib, but Echo is widely adopted and the team is unlikely to outgrow it.
 
 **Embedding strategy:** Use DashScope's hosted `text-embedding-v3` API (multilingual, 1024-dim, very low cost). This eliminates the need to run `sentence-transformers` in Python and avoids any Python dependency in the stack. If local embeddings are later needed (to cut API cost at scale), replace with ONNX-Runtime-in-Go via `gomlx/onnx-gomlx` — the Embedder is behind an internal seam, so swapping is a non-breaking change.
 
 **Why no API gateway?** An API gateway (Kong, Traefik, AWS API Gateway) solves problems this project doesn't have yet: multiple independently deployed services, edge-level rate limiting, request transformation across services. In our architecture, all services are co-located Go binaries behind a single Echo server. Echo handles routing, middleware-based auth, and rate limiting. Tools are called by workers, not by clients, so there is no external tool routing need. Add Traefik later if/when services are independently deployed — it's a configuration change, not an architecture change.
 
-**Why RLS + partitioning over per-tenant infrastructure?** A 3-person team cannot operate N databases. RLS enforces tenant scoping at the database level (even a buggy application cannot leak data). Table partitioning physically separates tenant data on disk. Together they satisfy any non-regulated enterprise customer. If a regulated entity demands physical separation, the module interfaces allow pointing a tenant at a dedicated Postgres instance via configuration change — no code changes.
+**Why RLS + partitioning over per-tenant infrastructure?** Operating N databases is a heavy operational burden for a multi-tenant platform. RLS enforces tenant scoping at the database level (even a buggy application cannot leak data). Table partitioning physically separates tenant data on disk. Together they satisfy any non-regulated enterprise customer. If a regulated entity demands physical separation, the module interfaces allow pointing a tenant at a dedicated Postgres instance via configuration change — no code changes.
 
-**Why `hibiken/asynq` over RQ/Celery?** RQ is Python-only. Celery is powerful but complex (multiple brokers, multiple result backends, configuration-heavy). `asynq` is Go-native, uses plain Redis, and provides job scheduling, retries, dead letter queues, unique jobs, and per-queue concurrency control in one well-maintained library. A 3-person team can learn it in a day.
+**Why `hibiken/asynq` over RQ/Celery?** RQ is Python-only. Celery is powerful but complex (multiple brokers, multiple result backends, configuration-heavy). `asynq` is Go-native, uses plain Redis, and provides job scheduling, retries, dead letter queues, unique jobs, and per-queue concurrency control in one well-maintained library.
 
-**Why Supabase over self-managed Postgres?** Supabase is managed Postgres with built-in Auth (JWT, OAuth, MFA, magic links), RLS enforcement, and S3-compatible object Storage — all on a single platform. For a 3-person team, it replaces weeks of auth code, database operations, and file upload infrastructure. Supabase is 100% Postgres underneath — we connect directly via `pgx` from workers, not through Supabase's REST API for high-throughput paths. See [Supabase Integration](#supabase-integration) below.
+**Why self-managed Postgres with custom RLS?** A single Postgres instance with Row-Level Security and table partitioning gives us tenant isolation without the operational overhead of per-tenant databases. We implement our own auth (JWT, password hashing, session management) rather than depending on a third-party auth provider — this keeps the platform self-contained and avoids lock-in to any particular infrastructure vendor. File uploads are handled by a dedicated Go endpoint backed by local or S3-compatible storage.
 
 ### Architecture Overview
 
@@ -129,9 +129,9 @@ All asynchronous work (ingestion, report generation, delivery) flows through a s
 - Tool permission management (generic and private tools per tenant)
 - Usage tracking: **aggregates** usage metadata emitted by LLM Client and Tool Registry. These modules emit usage events; Control Plane stores and queries them.
 
-**Auth note:** Authentication is handled by **Supabase Auth** (JWT with OAuth, magic links, MFA). The Echo middleware verifies the JWT on every request, reads the user's active tenant from their session/cookie, and injects `tenant_id` into context. The Control Plane never deals with login/token logic — it receives an already-authenticated `tenant_id`. See [Supabase Integration](#supabase-integration) for the multi-tenant auth design.
+**Auth note:** Authentication is handled by the platform's own auth module. Users register and log in via the Echo API, receiving a JWT. The Echo middleware verifies the JWT on every request, reads the user's active tenant from their session/cookie, and injects `tenant_id` into context. The Control Plane never deals with login/token logic — it receives an already-authenticated `tenant_id`.
 
-**Storage:** Supabase-managed Postgres. Stores tenants, users, data source configs (credentials encrypted at rest), schedules, tool permissions, and usage aggregates. RLS is enforced by Supabase at the database layer.
+**Storage:** Self-managed Postgres with pgvector. Stores tenants, users, data source configs (credentials encrypted at rest), schedules, tool permissions, and usage aggregates. RLS is enforced by Postgres policies at the database layer.
 
 ### Module 2: Ingestion Workers
 
@@ -178,7 +178,7 @@ Each connector is an internal seam within the Ingestion module — swappable, in
 - Enforce tenant isolation at the storage layer (row-level or namespace-level)
 - Handle full tenant data deletion
 
-**Storage:** pgvector (Postgres extension). Chosen over Qdrant to minimize infrastructure for a 3-person team. The vector store lives in the same Postgres instance as the control plane, in a separate schema.
+**Storage:** pgvector (Postgres extension). Chosen over Qdrant to minimize infrastructure. The vector store lives in the same Postgres instance as the control plane, in a separate schema.
 
 **Isolation model:** Every query function receives `tenant_id` as a required parameter. The storage layer enforces scoping — a query without a tenant_id is impossible by construction, not by convention.
 
@@ -505,9 +505,9 @@ SetTenantBudget(tenantID string, monthlyBudgetUSD decimal.Decimal) error
 | Language | Go 1.22+ | Single static binary per service. Low memory (workers: 50-100MB). Fast startup (<10ms). Native concurrency via goroutines. Compile-time type safety across all modules. |
 | HTTP Framework | `labstack/echo` | Batteries-included: routing, middleware composition, request binding/validation, OpenAPI generation via `swaggo/swag`. Less boilerplate than bare `net/http` + `chi` for CRUD-heavy + HTMX apps. |
 | Web UI | Go `a-h/templ` + HTMX | Type-safe server-rendered HTML templates compiled at build time. Zero JS build step. ~14KB frontend JS (HTMX only). Compile-time catches template errors before deployment. |
-| Platform / Database | **Supabase** (managed Postgres 16 + pgvector) | Zero-ops Postgres. Built-in Auth, RLS enforcement, S3-compatible Storage. 100% portable — self-hostable. Saves weeks of infra and auth work. |
-| Auth | **Supabase Auth** | JWT + OAuth + MFA + magic links + user management. Custom claims carry `tenant_id`. Saves 2-3 weeks of building auth from scratch. |
-| File Storage | **Supabase Storage** | S3-compatible object storage. Clients upload directly via presigned URLs — no upload handler in Go. Workers access files via the same storage API. |
+| Platform / Database | Self-managed Postgres 16 + pgvector | Full control over infrastructure. RLS and table partitioning for tenant isolation. Single database, zero vendor lock-in. |
+| Auth | Custom JWT auth (golang-jwt) | Platform-owned auth with no third-party dependency. JWT issuance, password hashing, and session management built in Go. |
+| File Storage | Local filesystem or S3-compatible (MinIO) | Files uploaded via the Echo API, stored on local disk or S3-compatible object storage. Workers access files from the same storage. |
 | Job Queue | `hibiken/asynq` + Redis | Go-native job queue on Redis. Scheduling, retries, dead letters, unique jobs, per-queue concurrency. Simpler than Celery, equivalent to RQ. |
 | LLM Provider | Qwen3.7-max (primary), Qwen3.7-plus (fallback) | Via DashScope API. Strong tool-use and reasoning. Fallback ensures resilience. |
 | Embeddings | DashScope `text-embedding-v3` | Hosted, multilingual, 1024-dim, very low cost. No local model dependency. Local ONNX inference available later via `gomlx/onnx-gomlx` if needed. |
@@ -518,75 +518,32 @@ SetTenantBudget(tenantID string, monthlyBudgetUSD decimal.Decimal) error
 The web UI is a **thin client** — all business logic lives in the backend API. The UI compiles at build time via `a-h/templ` (type-safe Go → HTML) and is served by the main Go binary, with HTMX for dynamic interactions.
 
 - **Not a module.** The web UI has no domain logic. It is a presentation layer over the Control Plane API.
-- **Auth is Supabase Auth.** The UI uses the `@supabase/supabase-js` client SDK for login, session, and direct Storage uploads. Echo middleware on the API side verifies the JWT on each request.
-- **File uploads** go directly to Supabase Storage via presigned URLs — the UI never sends files to Echo; it uploads to Storage and then notifies the Go API with the storage path.
+- **Auth is custom JWT.** The platform issues its own JWTs (golang-jwt) on login. Echo middleware verifies the JWT on each request. The UI posts credentials to the Echo API and stores the returned JWT.
+- **File uploads** go through the Echo API to local or S3-compatible storage. The UI sends files to the Go API, which stores them and notifies the ingestion pipeline.
 - **Report viewing** uses Server-Sent Events (Echo `StreamResponseWriter`) to stream generation progress.
 - **Compile-time safety.** Templ templates are compiled Go code — a template error is a compile error, not a runtime surprise.
 - **Upgrade path:** If a richer SPA is needed later, any JS frontend can hit the same Echo API endpoints. The UI technology is fully swappable.
 
-### Supabase Integration
+### Auth & Tenant Isolation
 
-Supabase provides the platform infrastructure layer — Auth, managed Postgres+pgvector, and Storage. All business logic lives in Go; Supabase handles the horizontal concerns.
-
-#### What we use from Supabase
-
-| Capability | Replaces | Rationale |
-|---|---|---|
-| **Supabase Auth** | Custom JWT middleware + user tables | Login, sessions, OAuth (Google, GitHub, etc.), MFA, magic links, password reset, user management — all out of the box. JWTs carry a custom `tenant_id` claim. Saves 2–3 weeks of auth code. |
-| **Managed Postgres 16 + pgvector** | Self-managed Postgres | Zero-ops database: read replicas, connection pooling, point-in-time recovery, daily backups. SOC 2 Type II certified. |
-| **Supabase Storage** | Custom upload endpoint + S3 config | S3-compatible object storage. Clients upload directly via presigned URLs — no upload handler in Go. Workers access files from the same storage. |
-| **Row Level Security** (native) | None (our strategy runs on top) | Supabase's Auth model is built around RLS. Our tenant-isolation policies work naturally with `auth.uid()` and custom claims. Defense-in-depth without extra middleware. |
-
-#### What we still build in Go
-
-- Control Plane API handlers (tenant CRUD, schedule management, encrypted credentials, budgets, invoices)
-- Ingestion Workers (file parsing, chunking, embedding API calls, knowledge store writes)
-- Report Workers (agent loop, LLM calls, report synthesis, delivery)
-- LLM Client, Tool Registry, Knowledge Store
-- Job queue (`asynq`) scheduling and dispatching
-- Usage tracking emitter, collector worker, billing/invoice logic
-- Web UI rendering (Echo + templ + HTMX)
-
-Workers connect to Postgres **directly via `pgx`** — not through Supabase's REST API — for high-throughput ingestion and vector search. Supabase only manages the database itself; the SQL is standard Postgres.
-
-#### How clients connect
-
-```
-                   Supabase Platform
-         ┌───────────────────────────────────┐
-         │  Auth      Postgres     Storage   │
-         │                    + pgvector      │
-         └──────────────┬────────────────────┘
-                        │
-          ┌─────────────┼─────────────┐
-          │             │             │
-     Web UI          Go workers       Echo API
-          │        (pgx directly)     (JWT middleware)
-          │             │             │
-   supabase-js    standard SQL    Control Plane
-   (browser)      queries         functions
-```
-
-- **Web UI** uses `@supabase/supabase-js` in the browser for login and direct Storage upload.
-- **Echo API** middleware verifies the Supabase JWT on every request, sets `app.tenant_id` for RLS context.
-- **Workers** (ingestion, reporting, collector) connect to Postgres directly via `pgx` connection pool — the fastest path for bulk operations. Supabase manages the database; workers talk standard SQL.
+Authentication is handled by the platform's own auth module (golang-jwt, bcrypt password hashing). All business logic lives in Go.
 
 #### Multi-tenant Auth Design
 
-Supabase Auth uses global email uniqueness (one account per email across the entire platform). To support a user belonging to multiple tenants with different roles:
+The auth system uses global email uniqueness (one account per email across the entire platform). To support a user belonging to multiple tenants with different roles:
 
 ```sql
 -- Which tenants can this user access, and in what role?
 CREATE TABLE tenant_memberships (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID NOT NULL REFERENCES auth.users(id),
+    user_id    UUID NOT NULL REFERENCES users(id),
     tenant_id  TEXT NOT NULL REFERENCES tenants(id),
     role       TEXT NOT NULL,   -- 'admin' | 'viewer'
     UNIQUE (user_id, tenant_id)
 );
 ```
 
-On login, the client receives a JWT with `sub = auth.uid()`. The user's active tenant is tracked in a session cookie (or local state). Supabase Edge Function or a post-login webhook writes `app.tenant_id` into the session for RLS.
+On login, the client receives a JWT. The user's active tenant is tracked in a session cookie (or local state). The Echo middleware sets `app.tenant_id` in the Postgres session for RLS.
 
 RLS policies enforce isolation using both the JWT and the session context:
 
@@ -601,7 +558,7 @@ CREATE POLICY membership_check ON tenants
     FOR SELECT
     USING (id IN (
         SELECT tenant_id FROM tenant_memberships
-        WHERE user_id = auth.uid()
+        WHERE user_id = current_setting('app.user_id')::uuid
     ));
 
 -- Credentials: only admins can read (for tool invocations)
@@ -611,20 +568,20 @@ CREATE POLICY credential_access ON data_source_credentials
         tenant_id = current_setting('app.tenant_id')
         AND EXISTS (
             SELECT 1 FROM tenant_memberships
-            WHERE user_id = auth.uid()
+            WHERE user_id = current_setting('app.user_id')::uuid
             AND role = 'admin'
         )
     );
 ```
 
-This is the natural Supabase RLS pattern. The application sets context correctly; the database enforces isolation regardless of application bugs.
+This is the standard Postgres RLS pattern. The application sets context correctly; the database enforces isolation regardless of application bugs.
 
 #### Tenant switching flow
 
 A user belonging to multiple tenants has one active tenant at a time:
 
-1. Login → Supabase Auth returns JWT with `sub = user_id`
-2. Client lists user's tenants: `SELECT tenant_id, role FROM tenant_memberships WHERE user_id = auth.uid()`
+1. Login → Platform returns JWT
+2. Client lists user's tenants: `SELECT tenant_id, role FROM tenant_memberships WHERE user_id = $1`
 3. User picks a tenant → client sets `current_tenant` in local session (cookie)
 4. Every subsequent request includes `x-tenant-id` header (or cookie)
 5. Echo middleware reads it, sets `app.tenant_id` in Postgres session → enables RLS
@@ -673,7 +630,7 @@ Tests should be deterministic. Mock external services (LLM APIs, CRM APIs, web s
 - **Advanced analytics/BI dashboards** — reports are generated documents, not interactive dashboards.
 - **Real-time data streaming** — ingestion is periodic (batch), not real-time.
 - **SOC2/HIPAA certification** — the architecture supports future certification, but the certification process itself is out of scope for launch.
-- **API gateway** — the Echo server handles routing, auth (via Supabase JWT middleware), and rate limiting for all services. An API gateway (e.g. Traefik) is added only when independently deployed services emerge.
+- **API gateway** — the Echo server handles routing, auth (via JWT middleware), and rate limiting for all services. An API gateway (e.g. Traefik) is added only when independently deployed services emerge.
 
 ## Further Notes
 
@@ -689,7 +646,7 @@ Tests should be deterministic. Mock external services (LLM APIs, CRM APIs, web s
 - **LLM provider:** Qwen3.7-max (primary), Qwen3.7-plus (fallback) via DashScope API. Strong tool-use and reasoning, no GPU infrastructure needed.
 - **Embedding model:** DashScope `text-embedding-v3`. Hosted, multilingual, 1024 dimensions.
 - **Web framework:** Go `labstack/echo` for HTTP API, `a-h/templ` + HTMX for UI. Full-stack Go, single binary per service.
-- **Platform / Database:** Supabase (managed Postgres 16 + pgvector + Auth + Storage). Zero-ops database, built-in auth and RLS, S3-compatible file storage.
+- **Platform / Database:** Self-managed Postgres 16 + pgvector. RLS + table partitioning for tenant isolation. Single database, zero vendor lock-in.
 - **Job queue:** `hibiken/asynq` (Redis Queue). Go-native, simpler than Celery.
 - **Data isolation:** RLS + table partitioning. No per-tenant infrastructure needed.
 - **API gateway:** Not needed for prototype. Echo handles routing and rate limiting. Add Traefik later if multi-service architecture emerges.

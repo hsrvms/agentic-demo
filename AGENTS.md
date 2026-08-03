@@ -4,6 +4,16 @@ These rules apply to this Go project. They supplement the global engineering rul
 
 ---
 
+## Domain Model
+
+This project maintains a ubiquitous language glossary in `CONTEXT.md`. All
+domain terms (Tenant, DataSource, Report, AgentLoop, etc.) are defined there.
+When discussing features, naming things, or writing code, use the terms as
+defined in the glossary. If you need to introduce a new term, update
+`CONTEXT.md` first.
+
+---
+
 ## Language & Runtime
 
 - Target **Go 1.26+**.
