@@ -32,7 +32,8 @@ func TestS3ObjectStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	tenant := domain.TenantID("tenant-a")
 
-	err := store.Put(ctx, tenant, "sources/s1/file", bytes.NewReader([]byte("hello world")), 11)
+	content := []byte("hello world")
+	err := store.Put(ctx, tenant, "sources/s1/file", bytes.NewReader(content), int64(len(content)))
 	require.NoError(t, err)
 
 	rc, err := store.Get(ctx, tenant, "sources/s1/file")
@@ -57,7 +58,8 @@ func TestS3ObjectStore_DeleteRemovesObject(t *testing.T) {
 	ctx := context.Background()
 	tenant := domain.TenantID("tenant-a")
 
-	err := store.Put(ctx, tenant, "sources/s1/file", bytes.NewReader([]byte("data")), 4)
+	content := []byte("data")
+	err := store.Put(ctx, tenant, "sources/s1/file", bytes.NewReader(content), int64(len(content)))
 	require.NoError(t, err)
 
 	require.NoError(t, store.Delete(ctx, tenant, "sources/s1/file"))
@@ -69,7 +71,8 @@ func TestS3ObjectStore_TenantIsolation(t *testing.T) {
 	store := setupS3(t)
 	ctx := context.Background()
 
-	err := store.Put(ctx, domain.TenantID("tenant-a"), "sources/s1/file", bytes.NewReader([]byte("A's secret")), 11)
+	secret := []byte("A's secret")
+	err := store.Put(ctx, domain.TenantID("tenant-a"), "sources/s1/file", bytes.NewReader(secret), int64(len(secret)))
 	require.NoError(t, err)
 
 	// Reading the same relative key under a different tenant must not leak.
