@@ -50,7 +50,7 @@ func TestSourcesHandler_List_RendersTable(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources", http.NoBody)
@@ -85,7 +85,7 @@ func TestSourcesHandler_List_EmptyState(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources", http.NoBody)
@@ -122,7 +122,7 @@ func TestSourcesHandler_List_HTMXPagination(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources?page=2", http.NoBody)
@@ -157,7 +157,7 @@ func TestSourcesHandler_List_FlashesRendered(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources", http.NoBody)
@@ -178,7 +178,7 @@ func TestSourcesHandler_List_FlashesRendered(t *testing.T) {
 // --- NewForm tests ---
 
 func TestSourcesHandler_NewForm_RendersForm(t *testing.T) {
-	handler := NewSourcesHandler(&mockSourceService{})
+	handler := NewSourcesHandler(sources.NewHandlerCore(&mockSourceService{}))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/new", http.NoBody)
@@ -217,7 +217,7 @@ func TestSourcesHandler_Detail_RendersSource(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/"+id.String(), http.NoBody)
@@ -244,7 +244,7 @@ func TestSourcesHandler_Detail_NotFound(t *testing.T) {
 		detailErr: sources.ErrNotFound,
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/bad-id", http.NoBody)
@@ -261,7 +261,7 @@ func TestSourcesHandler_Detail_NotFound(t *testing.T) {
 
 func TestSourcesHandler_Detail_InvalidUUID(t *testing.T) {
 	svc := &mockSourceService{}
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/not-a-uuid", http.NoBody)
@@ -291,7 +291,7 @@ func TestSourcesHandler_EditForm_RendersPrepopulatedForm(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/"+id.String()+"/edit", http.NoBody)
@@ -326,7 +326,7 @@ func TestSourcesHandler_Create_HTMXRedirect(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	form := url.Values{}
@@ -363,7 +363,7 @@ func TestSourcesHandler_Create_FullPageRedirect(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	form := url.Values{}
@@ -393,7 +393,7 @@ func TestSourcesHandler_Create_HTMXValidationError(t *testing.T) {
 		createErr: sources.ErrInvalidName,
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	form := url.Values{}
@@ -430,7 +430,7 @@ func TestSourcesHandler_Update_HTMXRedirect(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	form := url.Values{}
@@ -461,7 +461,7 @@ func TestSourcesHandler_Delete_HTMXReturnsNoContent(t *testing.T) {
 
 	svc := &mockSourceService{}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/sources/"+id.String(), http.NoBody)
@@ -483,7 +483,7 @@ func TestSourcesHandler_Delete_FullPageRedirect(t *testing.T) {
 
 	svc := &mockSourceService{}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/sources/"+id.String(), http.NoBody)
@@ -507,7 +507,7 @@ func TestSourcesHandler_Delete_NotFound(t *testing.T) {
 		deleteErr: sources.ErrNotFound,
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/sources/"+id.String(), http.NoBody)
@@ -537,7 +537,7 @@ func TestSourcesHandler_TestConnection_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources/"+id.String()+"/test", http.NoBody)
@@ -568,7 +568,7 @@ func TestSourcesHandler_TestConnection_Failure(t *testing.T) {
 		},
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources/"+id.String()+"/test", http.NoBody)
@@ -593,7 +593,7 @@ func TestSourcesHandler_Sync_Triggered(t *testing.T) {
 
 	svc := &mockSourceService{}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources/"+id.String()+"/sync", http.NoBody)
@@ -619,7 +619,7 @@ func TestSourcesHandler_Sync_Error(t *testing.T) {
 		syncErr: assert.AnError,
 	}
 
-	handler := NewSourcesHandler(svc)
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources/"+id.String()+"/sync", http.NoBody)

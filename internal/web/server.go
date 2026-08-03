@@ -46,9 +46,9 @@ func WithDashboard(
 }
 
 // WithSources wires the sources management handler.
-func WithSources(sourceService sources.Service) ServerOption {
+func WithSources(sourceCore *sources.HandlerCore) ServerOption {
 	return func(s *Server) {
-		s.sourcesHandler = NewSourcesHandler(sourceService)
+		s.sourcesHandler = NewSourcesHandler(sourceCore)
 	}
 }
 

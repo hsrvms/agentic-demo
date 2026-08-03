@@ -19,12 +19,12 @@ const sourcesPageSize = 20
 
 // SourcesHandler serves the data source management pages.
 type SourcesHandler struct {
-	service sources.Service
+	core *sources.HandlerCore
 }
 
 // NewSourcesHandler creates a SourcesHandler.
-func NewSourcesHandler(service sources.Service) *SourcesHandler {
-	return &SourcesHandler{service: service}
+func NewSourcesHandler(core *sources.HandlerCore) *SourcesHandler {
+	return &SourcesHandler{core: core}
 }
 
 // Register mounts sources routes on the authenticated web group.
@@ -50,7 +50,7 @@ func (h *SourcesHandler) List(c echo.Context) error {
 		page = 1
 	}
 
-	result, err := h.service.ListByTenant(ctx, tenantID, page, sourcesPageSize)
+	result, err := h.core.List(ctx, tenantID, page, sourcesPageSize)
 	if err != nil {
 		log.Printf("sources list error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load sources")
@@ -66,12 +66,11 @@ func (h *SourcesHandler) List(c echo.Context) error {
 	hasMore := (page * sourcesPageSize) < result.TotalCount
 	nextPage := page + 1
 
-	// For HTMX pagination requests, return just the table rows fragment.
 	if IsHTMX(c) {
 		return Render(c, http.StatusOK, webpages.SourceRowsFragment(items, csrf))
 	}
 
-	data := webui.MapSourceList(result)
+	data := webui.MapSourceList(sources.DataSourcePage(result))
 	data.HasMore = hasMore
 	data.NextPage = nextPage
 
@@ -99,7 +98,7 @@ func (h *SourcesHandler) Detail(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	ds, err := h.service.GetByID(c.Request().Context(), id)
+	result, err := h.core.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, sources.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "source not found")
@@ -111,7 +110,7 @@ func (h *SourcesHandler) Detail(c echo.Context) error {
 	csrf := GetCSRFToken(c.Request().Context())
 	flashes := GetFlashMessages(c.Request().Context())
 
-	data := webui.MapSourceDetail(&ds)
+	data := webui.MapSourceDetail(&result.DataSource)
 
 	return Render(c, http.StatusOK, webpages.SourceDetail(data, csrf, flashes))
 }
@@ -123,7 +122,7 @@ func (h *SourcesHandler) EditForm(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	ds, err := h.service.GetByID(c.Request().Context(), id)
+	result, err := h.core.Get(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, sources.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "source not found")
@@ -132,6 +131,7 @@ func (h *SourcesHandler) EditForm(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load source")
 	}
 
+	ds := result.DataSource
 	csrf := GetCSRFToken(c.Request().Context())
 	flashes := GetFlashMessages(c.Request().Context())
 
@@ -158,7 +158,7 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 
 	config, creds := buildConfigAndCreds(sourceType, c)
 
-	ds, err := h.service.Create(ctx, &sources.CreateDataSourceParams{
+	result, err := h.core.Create(ctx, tenantID, &sources.CreateDataSourceParams{
 		TenantID:    tenantID,
 		SourceType:  sources.SourceType(sourceType),
 		Name:        name,
@@ -170,12 +170,12 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 	}
 
 	if IsHTMX(c) {
-		c.Response().Header().Set("HX-Redirect", "/sources/"+ds.ID.String())
+		c.Response().Header().Set("HX-Redirect", "/sources/"+result.DataSource.ID.String())
 		return c.NoContent(http.StatusOK)
 	}
 
 	setFlashCookie(c, webui.Flash{Intent: "success", Message: "Source created successfully"})
-	return c.Redirect(http.StatusSeeOther, "/sources/"+ds.ID.String())
+	return c.Redirect(http.StatusSeeOther, "/sources/"+result.DataSource.ID.String())
 }
 
 // Update handles PUT /sources/:id.
@@ -201,7 +201,7 @@ func (h *SourcesHandler) Update(c echo.Context) error {
 		params.Credentials = &creds
 	}
 
-	_, err = h.service.Update(c.Request().Context(), id, params)
+	_, err = h.core.Update(c.Request().Context(), id, params)
 	if err != nil {
 		return h.formError(c, err)
 	}
@@ -222,7 +222,7 @@ func (h *SourcesHandler) Delete(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if _, err := h.core.Delete(c.Request().Context(), id); err != nil {
 		if errors.Is(err, sources.ErrNotFound) {
 			return echo.NewHTTPError(http.StatusNotFound, "source not found")
 		}
@@ -245,7 +245,7 @@ func (h *SourcesHandler) TestConnection(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	result, err := h.service.TestConnection(c.Request().Context(), id)
+	result, err := h.core.TestConnection(c.Request().Context(), id)
 	if err != nil {
 		log.Printf("sources test error: %v", err)
 		return Render(c, http.StatusOK, webpages.StatusFragment(false, "Failed to test connection", ""))
@@ -261,7 +261,7 @@ func (h *SourcesHandler) Sync(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid source ID")
 	}
 
-	if err := h.service.Sync(c.Request().Context(), id); err != nil {
+	if _, err := h.core.Sync(c.Request().Context(), id); err != nil {
 		log.Printf("sources sync error: %v", err)
 		return Render(c, http.StatusOK, webpages.StatusFragment(false, "Failed to trigger sync", ""))
 	}
@@ -331,4 +331,3 @@ func extractConfigURL(config json.RawMessage) string {
 	}
 	return cfg.URL
 }
-

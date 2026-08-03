@@ -18,8 +18,15 @@ import (
 )
 
 func TestHandler_Create(t *testing.T) {
-	svc := &mockService{}
-	handler := NewHandler(svc)
+	svc := &mockService{
+		createResult: DataSource{
+			ID:         uuid.New(),
+			Name:       "My Website",
+			SourceType: SourceTypeWebsite,
+			Status:     StatusInactive,
+		},
+	}
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/sources", strings.NewReader(`{
 		"source_type": "website",
@@ -43,7 +50,7 @@ func TestHandler_Create(t *testing.T) {
 
 func TestHandler_Create_BadRequest(t *testing.T) {
 	svc := &mockService{createErr: ErrInvalidName}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/sources", strings.NewReader(`{"source_type": "website"}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -67,7 +74,7 @@ func TestHandler_List(t *testing.T) {
 			PageSize:   20,
 		},
 	}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/sources?page=1&limit=20", http.NoBody)
 	rec := httptest.NewRecorder()
@@ -94,7 +101,7 @@ func TestHandler_Get(t *testing.T) {
 			Status:     StatusActive,
 		},
 	}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/sources/"+id.String(), http.NoBody)
 	rec := httptest.NewRecorder()
@@ -112,7 +119,7 @@ func TestHandler_Get(t *testing.T) {
 
 func TestHandler_Get_NotFound(t *testing.T) {
 	svc := &mockService{getErr: ErrNotFound}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	id := uuid.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/sources/"+id.String(), http.NoBody)
@@ -129,7 +136,7 @@ func TestHandler_Get_NotFound(t *testing.T) {
 }
 
 func TestHandler_Get_InvalidID(t *testing.T) {
-	handler := NewHandler(&mockService{})
+	handler := NewHandler(NewHandlerCore(&mockService{}))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/sources/bad-uuid", http.NoBody)
 	rec := httptest.NewRecorder()
@@ -153,7 +160,7 @@ func TestHandler_Update(t *testing.T) {
 			Status: StatusActive,
 		},
 	}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/sources/"+id.String(), strings.NewReader(`{
 		"name": "Updated",
@@ -175,7 +182,7 @@ func TestHandler_Update(t *testing.T) {
 
 func TestHandler_Delete(t *testing.T) {
 	svc := &mockService{}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	id := uuid.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/sources/"+id.String(), http.NoBody)
@@ -192,7 +199,7 @@ func TestHandler_TestConnection(t *testing.T) {
 	svc := &mockService{
 		testResult: ConnectionTestResult{Success: true, Message: "ok", Latency: "5ms"},
 	}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	id := uuid.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/sources/"+id.String()+"/test", http.NoBody)
@@ -213,7 +220,7 @@ func TestHandler_TestConnection_Failed(t *testing.T) {
 	svc := &mockService{
 		testResult: ConnectionTestResult{Success: false, Message: "connection refused"},
 	}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	id := uuid.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/sources/"+id.String()+"/test", http.NoBody)
@@ -228,7 +235,7 @@ func TestHandler_TestConnection_Failed(t *testing.T) {
 
 func TestHandler_Sync(t *testing.T) {
 	svc := &mockService{}
-	handler := NewHandler(svc)
+	handler := NewHandler(NewHandlerCore(svc))
 	e := setupEcho()
 	id := uuid.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/sources/"+id.String()+"/sync", http.NoBody)
@@ -242,11 +249,10 @@ func TestHandler_Sync(t *testing.T) {
 }
 
 func TestHandler_Register(t *testing.T) {
-	handler := NewHandler(&mockService{})
+	handler := NewHandler(NewHandlerCore(&mockService{}))
 	e := echo.New()
 	g := e.Group("/api")
 	handler.Register(g)
-	// Verify routes are registered by checking the router.
 	routes := e.Routes()
 	paths := make(map[string]bool)
 	for _, r := range routes {
@@ -262,7 +268,6 @@ func TestHandler_Register(t *testing.T) {
 
 func setupEcho() *echo.Echo {
 	e := echo.New()
-	// Set up tenant context for tests.
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			tenantID := c.Get("tenant_id")
@@ -274,70 +279,4 @@ func setupEcho() *echo.Echo {
 		}
 	})
 	return e
-}
-
-// --- mock service ---
-
-type mockService struct {
-	createResult DataSource
-	createErr    error
-	getResult    DataSource
-	getErr       error
-	listResult   DataSourcePage
-	listErr      error
-	updateResult DataSource
-	updateErr    error
-	deleteErr    error
-	testResult   ConnectionTestResult
-	testErr      error
-	syncErr      error
-}
-
-func (m *mockService) Create(ctx context.Context, params *CreateDataSourceParams) (DataSource, error) {
-	if m.createErr != nil {
-		return DataSource{}, m.createErr
-	}
-	if m.createResult.ID == uuid.Nil {
-		m.createResult.ID = uuid.New()
-	}
-	m.createResult.TenantID = params.TenantID
-	m.createResult.SourceType = params.SourceType
-	m.createResult.Name = params.Name
-	return m.createResult, nil
-}
-
-func (m *mockService) GetByID(ctx context.Context, id uuid.UUID) (DataSource, error) {
-	if m.getErr != nil {
-		return DataSource{}, m.getErr
-	}
-	return m.getResult, nil
-}
-
-func (m *mockService) ListByTenant(ctx context.Context, tenantID string, page, pageSize int) (DataSourcePage, error) {
-	if m.listErr != nil {
-		return DataSourcePage{}, m.listErr
-	}
-	return m.listResult, nil
-}
-
-func (m *mockService) Update(ctx context.Context, id uuid.UUID, params UpdateDataSourceParams) (DataSource, error) {
-	if m.updateErr != nil {
-		return DataSource{}, m.updateErr
-	}
-	return m.updateResult, nil
-}
-
-func (m *mockService) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.deleteErr
-}
-
-func (m *mockService) TestConnection(ctx context.Context, id uuid.UUID) (ConnectionTestResult, error) {
-	if m.testErr != nil {
-		return ConnectionTestResult{}, m.testErr
-	}
-	return m.testResult, nil
-}
-
-func (m *mockService) Sync(ctx context.Context, id uuid.UUID) error {
-	return m.syncErr
 }

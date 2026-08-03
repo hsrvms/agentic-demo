@@ -100,7 +100,8 @@ func New(cfg config.Config) (*Server, error) {
 		sources.NewConnectionTester(),
 		jobQueue,
 	)
-	sources.NewHandler(sourceService).Register(api, tenantMw)
+	sourceCore := sources.NewHandlerCore(sourceService)
+	sources.NewHandler(sourceCore).Register(api, tenantMw)
 
 	usageRepo := usage.NewRepository(queries)
 	usageService := usage.NewService(usageRepo, usageReader)
@@ -111,7 +112,7 @@ func New(cfg config.Config) (*Server, error) {
 
 	web.NewServer(authService, tenantService,
 		web.WithDashboard(usageService, reportService, sourceService, budgetService),
-		web.WithSources(sourceService),
+		web.WithSources(sourceCore),
 	).Register(e.Group(""))
 	e.GET("/static/*", web.StaticHandler())
 	e.HTTPErrorHandler = web.MakeErrorHandler(e.HTTPErrorHandler)
