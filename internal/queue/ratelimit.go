@@ -11,6 +11,7 @@ import (
 type TenantRateLimiter interface {
 	Acquire(ctx context.Context, tenantID string) error
 	Release(ctx context.Context, tenantID string)
+	Close() error
 }
 
 // redisRateLimiter implements TenantRateLimiter using Redis INCR/DECR
@@ -70,4 +71,9 @@ func (r *redisRateLimiter) Release(ctx context.Context, tenantID string) {
 	`)
 
 	_ = script.Run(ctx, r.client, []string{key}).Err()
+}
+
+// Close releases the Redis connection owned by the rate limiter.
+func (r *redisRateLimiter) Close() error {
+	return r.client.Close()
 }
