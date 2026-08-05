@@ -29,7 +29,7 @@ type WorkerServer struct {
 
 // NewWorkerServer creates a WorkerServer with the given config and handler deps.
 // If cfg.Queues is nil, default queue weights are used.
-func NewWorkerServer(cfg ServerConfig, deps HandlerDeps) *WorkerServer {
+func NewWorkerServer(cfg ServerConfig, deps *HandlerDeps) *WorkerServer {
 	queues := cfg.Queues
 	if queues == nil {
 		queues = defaultQueues

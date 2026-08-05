@@ -59,7 +59,7 @@ func TestWorkerServer_StartStop(t *testing.T) {
 		MaxRetry:    0,
 	}
 
-	srv := NewWorkerServer(cfg, deps)
+	srv := NewWorkerServer(cfg, &deps)
 
 	if err := srv.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -162,7 +162,7 @@ func TestNewWorkerServer_DefaultQueues(t *testing.T) {
 		MaxRetry:    3,
 	}
 
-	srv := NewWorkerServer(cfg, deps)
+	srv := NewWorkerServer(cfg, &deps)
 	if srv == nil {
 		t.Fatal("expected non-nil WorkerServer")
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/tenant"
@@ -53,10 +54,10 @@ func WithSources(sourceCore *sources.HandlerCore) ServerOption {
 	}
 }
 
-// WithReports wires the report browsing handler.
-func WithReports(reportService reports.ReportService) ServerOption {
+// WithReports wires the report browsing and generation handler.
+func WithReports(reportService reports.ReportService, jobQueue queue.JobQueue) ServerOption {
 	return func(s *Server) {
-		s.reportsHandler = NewReportsHandler(reportService)
+		s.reportsHandler = NewReportsHandler(reportService, jobQueue)
 	}
 }
 

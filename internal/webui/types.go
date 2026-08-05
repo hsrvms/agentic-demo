@@ -52,16 +52,28 @@ type SourceTypeOption struct {
 	Label string
 }
 
+// ReportTypeOption is an option in the report type selector.
+type ReportTypeOption struct {
+	Value string
+	Label string
+}
+
+// GenerateReportForm is the view model for the generate-report modal form.
+type GenerateReportForm struct {
+	CSRFToken   string
+	TypeOptions []ReportTypeOption
+}
+
 // SourceFormData is the view model for the create/edit source form.
 type SourceFormData struct {
-	Editing     bool
-	SourceID    string
-	Name        string
-	SourceType  string
-	ConfigURL   string
+	Editing      bool
+	SourceID     string
+	Name         string
+	SourceType   string
+	ConfigURL    string
 	ConfigAPIKey string
-	CSRFToken   string
-	TypeOptions []SourceTypeOption
+	CSRFToken    string
+	TypeOptions  []SourceTypeOption
 }
 
 // SourceDetailData is the view model for the source detail page.
@@ -94,8 +106,8 @@ type ReportListData struct {
 
 // Citation is a single source reference attached to a generated report.
 type Citation struct {
-	Title string
-	URL   string
+	Title  string
+	URL    string
 	Source string
 }
 

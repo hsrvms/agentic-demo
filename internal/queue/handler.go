@@ -29,7 +29,7 @@ type HandlerDeps struct {
 }
 
 // RegisterHandlers registers all task handlers on the given mux.
-func RegisterHandlers(mux *asynq.ServeMux, deps HandlerDeps) {
+func RegisterHandlers(mux *asynq.ServeMux, deps *HandlerDeps) {
 	ingest := &IngestHandler{worker: deps.IngestWorker, rateLimiter: deps.RateLimiter}
 	report := &ReportHandler{
 		worker:        deps.ReportWorker,

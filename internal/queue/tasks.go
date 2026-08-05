@@ -9,14 +9,14 @@ import (
 
 // Task type constants identify job categories in the queue.
 const (
-	TypeIngestionScheduled   = "ingestion:scheduled"
-	TypeIngestionManual      = "ingestion:manual"
-	TypeIngestionFileUpload  = "ingestion:file_upload"
-	TypeReportDaily          = "report:daily"
-	TypeReportWeekly         = "report:weekly"
-	TypeReportMonthly        = "report:monthly"
-	TypeReportOnDemand       = "report:on_demand"
-	TypeDeliveryEmail        = "delivery:email"
+	TypeIngestionScheduled  = "ingestion:scheduled"
+	TypeIngestionManual     = "ingestion:manual"
+	TypeIngestionFileUpload = "ingestion:file_upload"
+	TypeReportDaily         = "report:daily"
+	TypeReportWeekly        = "report:weekly"
+	TypeReportMonthly       = "report:monthly"
+	TypeReportOnDemand      = "report:on_demand"
+	TypeDeliveryEmail       = "delivery:email"
 )
 
 // Queue names for routing tasks to workers with different priorities.
@@ -72,6 +72,23 @@ func NewReportTask(payload *ReportPayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return newTask(taskType, payload, QueueReport)
+}
+
+// NewReportJob creates a Job for report generation with validated payload. It
+// mirrors NewReportTask but returns a Job suitable for JobQueue.Enqueue, which
+// is the enqueue path used by HTTP handlers.
+func NewReportJob(payload *ReportPayload) (Job, error) {
+	if payload.TenantID == "" {
+		return Job{}, fmt.Errorf("report payload: tenant_id is required")
+	}
+	if payload.ReportType == "" {
+		return Job{}, fmt.Errorf("report payload: report_type is required")
+	}
+	taskType, err := reportTypeToTaskType(payload.ReportType)
+	if err != nil {
+		return Job{}, err
+	}
+	return Job{Type: taskType, Queue: QueueReport, Payload: payload}, nil
 }
 
 // NewDeliveryTask creates an asynq task for email delivery with validated payload.

@@ -84,8 +84,8 @@ type mockLLMClient struct {
 func (m *mockLLMClient) Complete(_ context.Context, _ []domain.Message, _ llm.Options) (domain.CompletionResult, error) {
 	m.called.Store(true)
 	return domain.CompletionResult{
-		Text:        "Report content",
-		InputTokens: 10,
+		Text:         "Report content",
+		InputTokens:  10,
 		OutputTokens: 20,
 	}, nil
 }
@@ -355,7 +355,7 @@ func TestRegisterHandlers(t *testing.T) {
 		Logger: slog.Default(),
 	}
 
-	RegisterHandlers(mux, deps)
+	RegisterHandlers(mux, &deps)
 
 	// Verify at least one handler is registered by processing a task through the mux.
 	payload := IngestionPayload{TenantID: "t1", SourceID: "test"}
@@ -417,7 +417,7 @@ func (m *mockReportService) Delete(_ context.Context, _ uuid.UUID) error {
 // --- mockDeliveryService ---
 
 type mockDeliveryService struct {
-	delivered []delivery.DeliverParams
+	delivered  []delivery.DeliverParams
 	deliverErr error
 }
 
