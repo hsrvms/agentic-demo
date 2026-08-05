@@ -187,3 +187,11 @@ The pipeline that pulls data from a DataSource, chunks it, generates
 embeddings, and stores the results in the Knowledge Base. Ingestion runs as
 a job on the queue and can be triggered by a schedule, a manual request, or
 a file upload.
+
+### ObjectStore
+Tenant-scoped file storage backing uploaded files. Every operation is scoped
+to a tenant and stores objects under the prefix `tenant/{tenantID}/`, so no
+tenant can read another tenant's uploaded file by construction. Uploaded file
+bytes live here (not in the DataSource's credentials column); the DataSource
+config references the stored object via `object_key`. Implemented with a MinIO
+(S3) adapter and an in-memory fake.

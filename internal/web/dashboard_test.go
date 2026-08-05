@@ -65,8 +65,9 @@ type mockSourceService struct {
 	err          error
 	detailSource *sources.DataSource
 	detailErr    error
-	createResult sources.DataSource
-	createErr    error
+	createResult    sources.DataSource
+	createErr       error
+	createdParams   *sources.CreateDataSourceParams
 	updateResult sources.DataSource
 	updateErr    error
 	deleteErr    error
@@ -75,7 +76,8 @@ type mockSourceService struct {
 	syncErr      error
 }
 
-func (m *mockSourceService) Create(_ context.Context, _ *sources.CreateDataSourceParams) (sources.DataSource, error) {
+func (m *mockSourceService) Create(_ context.Context, params *sources.CreateDataSourceParams) (sources.DataSource, error) {
+	m.createdParams = params
 	return m.createResult, m.createErr
 }
 

@@ -3,10 +3,13 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"testing"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -20,7 +23,7 @@ func TestService_Create(t *testing.T) {
 	tester := &mockTester{}
 	jobQueue := &mockJobQueue{}
 
-	svc := NewService(repo, crypt, tester, jobQueue)
+	svc := NewService(repo, crypt, tester, jobQueue, &mockObjectStore{})
 	ctx := context.Background()
 
 	cfg := json.RawMessage(`{"url": "https://example.com"}`)
@@ -41,8 +44,117 @@ func TestService_Create(t *testing.T) {
 	assert.True(t, crypt.encryptCalled)
 }
 
+func TestService_Create_FileUploadPersistsToObjectStore(t *testing.T) {
+	repo := newMockRepo()
+	crypt := &mockCrypt{}
+	objectStore := newMockObjectStore()
+	svc := NewService(repo, crypt, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	cfg := json.RawMessage(`{"filename": "notes.txt", "size": "5"}`)
+	ds, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:    "tenant-1",
+		SourceType:  SourceTypeFileUpload,
+		Name:        "Notes",
+		Config:      cfg,
+		File:        []byte("hello"),
+	})
+	require.NoError(t, err)
+
+	// Bytes go to the object store, not the credentials column.
+	require.Len(t, objectStore.putKeys, 1)
+	key := objectStore.putKeys[0]
+	assert.Equal(t, "tenant/tenant-1/sources/00000000-0000-0000-0000-000000000000/file", key)
+	assert.Equal(t, []byte("hello"), objectStore.objects[key])
+	assert.Empty(t, ds.Credentials)
+	assert.False(t, crypt.encryptCalled)
+
+	// Config records the object key alongside filename/size.
+	var cfgOut map[string]string
+	require.NoError(t, json.Unmarshal(ds.Config, &cfgOut))
+	assert.Equal(t, "notes.txt", cfgOut["filename"])
+	assert.Equal(t, "5", cfgOut["size"])
+	assert.Equal(t, "sources/00000000-0000-0000-0000-000000000000/file", cfgOut["object_key"])
+}
+
+func TestService_Create_FileUploadWithoutBytesNoObject(t *testing.T) {
+	repo := newMockRepo()
+	objectStore := newMockObjectStore()
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeFileUpload,
+		Name:       "Empty",
+		Config:     json.RawMessage(`{"filename": "", "size": "0"}`),
+	})
+	require.NoError(t, err)
+	require.Empty(t, objectStore.putKeys)
+}
+
+func TestService_Delete_BestEffortDeletesObject(t *testing.T) {
+	repo := newMockRepo()
+	objectStore := newMockObjectStore()
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeFileUpload,
+		Name:       "Notes",
+		Config:     json.RawMessage(`{}`),
+		File:       []byte("hello"),
+	})
+	require.NoError(t, err)
+	require.Len(t, objectStore.putKeys, 1)
+
+	err = svc.Delete(ctx, uuid.Nil)
+	require.NoError(t, err)
+	require.Len(t, objectStore.deleteKeys, 1)
+	assert.Equal(t, objectStore.putKeys[0], objectStore.deleteKeys[0])
+}
+
+func TestService_Delete_ContinuesWhenObjectDeleteFails(t *testing.T) {
+	repo := newMockRepo()
+	objectStore := newMockObjectStore()
+	objectStore.deleteErr = errors.New("s3 outage")
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeFileUpload,
+		Name:       "Notes",
+		Config:     json.RawMessage(`{}`),
+		File:       []byte("hello"),
+	})
+	require.NoError(t, err)
+
+	// Best-effort: a failed object delete must not fail the source delete.
+	require.NoError(t, svc.Delete(ctx, uuid.Nil))
+}
+
+func TestService_Delete_NonFileSourceSkipsObjectDelete(t *testing.T) {
+	repo := newMockRepo()
+	objectStore := newMockObjectStore()
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeWebsite,
+		Name:       "Site",
+		Config:     json.RawMessage(`{"url": "https://example.com"}`),
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.Delete(ctx, uuid.Nil))
+	require.Empty(t, objectStore.deleteKeys)
+}
+
 func TestService_Create_Validation(t *testing.T) {
-	svc := NewService(newMockRepo(), &mockCrypt{}, &mockTester{}, &mockJobQueue{})
+	svc := NewService(newMockRepo(), &mockCrypt{}, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	tests := []struct {
@@ -67,7 +179,7 @@ func TestService_Create_Validation(t *testing.T) {
 func TestService_GetByID(t *testing.T) {
 	repo := newMockRepo()
 	crypt := &mockCrypt{}
-	svc := NewService(repo, crypt, &mockTester{}, &mockJobQueue{})
+	svc := NewService(repo, crypt, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	// Create a source first.
@@ -88,7 +200,7 @@ func TestService_GetByID(t *testing.T) {
 
 func TestService_ListByTenant(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{})
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
@@ -112,7 +224,7 @@ func TestService_ListByTenant(t *testing.T) {
 }
 
 func TestService_ListByTenant_EmptyTenant(t *testing.T) {
-	svc := NewService(newMockRepo(), &mockCrypt{}, &mockTester{}, &mockJobQueue{})
+	svc := NewService(newMockRepo(), &mockCrypt{}, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.ListByTenant(ctx, "", 1, 10)
@@ -122,7 +234,7 @@ func TestService_ListByTenant_EmptyTenant(t *testing.T) {
 func TestService_Update(t *testing.T) {
 	repo := newMockRepo()
 	crypt := &mockCrypt{}
-	svc := NewService(repo, crypt, &mockTester{}, &mockJobQueue{})
+	svc := NewService(repo, crypt, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.Create(ctx, &CreateDataSourceParams{
@@ -146,7 +258,7 @@ func TestService_Update(t *testing.T) {
 
 func TestService_Update_EmptyName(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{})
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.Create(ctx, &CreateDataSourceParams{
@@ -166,7 +278,7 @@ func TestService_Update_EmptyName(t *testing.T) {
 
 func TestService_Delete(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{})
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.Create(ctx, &CreateDataSourceParams{
@@ -184,7 +296,7 @@ func TestService_Delete(t *testing.T) {
 func TestService_TestConnection(t *testing.T) {
 	repo := newMockRepo()
 	tester := &mockTester{result: ConnectionTestResult{Success: true, Message: "ok"}}
-	svc := NewService(repo, &mockCrypt{}, tester, &mockJobQueue{})
+	svc := NewService(repo, &mockCrypt{}, tester, &mockJobQueue{}, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.Create(ctx, &CreateDataSourceParams{
@@ -204,7 +316,7 @@ func TestService_TestConnection(t *testing.T) {
 func TestService_Sync(t *testing.T) {
 	repo := newMockRepo()
 	jobQueue := &mockJobQueue{}
-	svc := NewService(repo, &mockCrypt{}, &mockTester{}, jobQueue)
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, jobQueue, &mockObjectStore{})
 	ctx := context.Background()
 
 	_, err := svc.Create(ctx, &CreateDataSourceParams{
@@ -269,6 +381,39 @@ func (m *mockJobQueue) EnqueueAt(ctx context.Context, job queue.Job, processAt t
 }
 
 func (m *mockJobQueue) Close() error {
+	return nil
+}
+
+// mockObjectStore records puts and deletes for service tests.
+type mockObjectStore struct {
+	objects    map[string][]byte // key -> content
+	putKeys    []string
+	deleteKeys []string
+	deleteErr  error
+}
+
+func newMockObjectStore() *mockObjectStore {
+	return &mockObjectStore{objects: make(map[string][]byte)}
+}
+
+func (m *mockObjectStore) Put(_ context.Context, tenantID domain.TenantID, key string, r io.Reader, _ int64) error {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	fullKey := "tenant/" + string(tenantID) + "/" + key
+	m.objects[fullKey] = data
+	m.putKeys = append(m.putKeys, fullKey)
+	return nil
+}
+
+func (m *mockObjectStore) Delete(_ context.Context, tenantID domain.TenantID, key string) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	fullKey := "tenant/" + string(tenantID) + "/" + key
+	m.deleteKeys = append(m.deleteKeys, fullKey)
+	delete(m.objects, fullKey)
 	return nil
 }
 

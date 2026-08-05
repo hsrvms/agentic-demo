@@ -1,16 +1,28 @@
 package sources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/google/uuid"
 )
+
+// ObjectStore is the narrow object-store seam the sources module consumes.
+// It is satisfied by storage.ObjectStore (MinIO adapter or in-memory fake) but
+// is defined here so the sources module depends only on what it needs:
+// persisting uploaded file bytes and removing them on delete.
+type ObjectStore interface {
+	Put(ctx context.Context, tenantID domain.TenantID, key string, r io.Reader, size int64) error
+	Delete(ctx context.Context, tenantID domain.TenantID, key string) error
+}
 
 // Service is the public interface for data source operations.
 type Service interface {
@@ -24,19 +36,21 @@ type Service interface {
 }
 
 type service struct {
-	repo    Repository
-	crypt   CryptService
-	tester  ConnectionTester
-	jobQueue queue.JobQueue
+	repo        Repository
+	crypt       CryptService
+	tester      ConnectionTester
+	jobQueue    queue.JobQueue
+	objectStore ObjectStore
 }
 
 // NewService creates a data source Service.
-func NewService(repo Repository, crypt CryptService, tester ConnectionTester, jobQueue queue.JobQueue) Service {
+func NewService(repo Repository, crypt CryptService, tester ConnectionTester, jobQueue queue.JobQueue, objectStore ObjectStore) Service {
 	return &service{
-		repo:     repo,
-		crypt:    crypt,
-		tester:   tester,
-		jobQueue: jobQueue,
+		repo:        repo,
+		crypt:       crypt,
+		tester:      tester,
+		jobQueue:    jobQueue,
+		objectStore: objectStore,
 	}
 }
 
@@ -65,6 +79,14 @@ func (s *service) Create(ctx context.Context, params *CreateDataSourceParams) (D
 	})
 	if err != nil {
 		return DataSource{}, fmt.Errorf("create source: %w", err)
+	}
+
+	// File uploads persist their bytes to the object store and reference the
+	// object key in the config; the credentials column stays clear.
+	if params.SourceType == SourceTypeFileUpload && len(params.File) > 0 {
+		if err := s.storeFile(ctx, params.TenantID, &row, params.File); err != nil {
+			return DataSource{}, err
+		}
 	}
 
 	return toDomain(&row), nil
@@ -179,11 +201,34 @@ func (s *service) Update(ctx context.Context, id uuid.UUID, params UpdateDataSou
 		return DataSource{}, fmt.Errorf("update source: %w", err)
 	}
 
+	// A new file upload replaces the stored object and updates the object key.
+	if len(params.File) > 0 {
+		if err := s.storeFile(ctx, row.TenantID, &row, params.File); err != nil {
+			return DataSource{}, err
+		}
+	}
+
 	return toDomain(&row), nil
 }
 
 func (s *service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.repo.Delete(ctx, id)
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	// Best-effort: remove the stored object if the source references one. A
+	// failure here must not fail the delete — the DB row is already gone and
+	// the object is recoverable via GC.
+	if key := fileObjectKey(row.Config); key != "" {
+		_ = s.objectStore.Delete(ctx, domain.TenantID(row.TenantID), key)
+	}
+
+	return nil
 }
 
 func (s *service) TestConnection(ctx context.Context, id uuid.UUID) (ConnectionTestResult, error) {
@@ -244,6 +289,65 @@ func (s *service) validateCreate(params *CreateDataSourceParams) error {
 }
 
 // --- helpers ---
+
+// storeFile persists an uploaded file's bytes to the object store and records
+// the object key in the source's config. The key is tenant-relative; the store
+// prefixes it with tenant/{tenantID}/ so cross-tenant access is impossible.
+func (s *service) storeFile(ctx context.Context, tenantID string, row *db.DataSourceConfig, content []byte) error {
+	key := "sources/" + row.ID.String() + "/file"
+	if err := s.objectStore.Put(ctx, domain.TenantID(tenantID), key, bytes.NewReader(content), int64(len(content))); err != nil {
+		return fmt.Errorf("store source file: %w", err)
+	}
+
+	config, err := withFileObjectKey(row.Config, key)
+	if err != nil {
+		return err
+	}
+
+	updated, err := s.repo.Update(ctx, &db.UpdateDataSourceParams{
+		ID:          row.ID,
+		Name:        row.Name,
+		Config:      config,
+		Credentials: row.Credentials,
+		Status:      row.Status,
+	})
+	if err != nil {
+		return fmt.Errorf("record source object key: %w", err)
+	}
+	*row = updated
+	return nil
+}
+
+// withFileObjectKey returns the config JSON with the object_key set, preserving
+// any existing fields (filename, size).
+func withFileObjectKey(config []byte, key string) ([]byte, error) {
+	var cfg map[string]interface{}
+	if len(config) > 0 {
+		if err := json.Unmarshal(config, &cfg); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidConfig, err)
+		}
+	}
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	cfg["object_key"] = key
+	return json.Marshal(cfg)
+}
+
+// fileObjectKey returns the object_key recorded in a file_upload source's
+// config, or "" when the source does not reference a stored object.
+func fileObjectKey(config []byte) string {
+	var cfg struct {
+		ObjectKey string `json:"object_key"`
+	}
+	if len(config) == 0 {
+		return ""
+	}
+	if err := json.Unmarshal(config, &cfg); err != nil {
+		return ""
+	}
+	return cfg.ObjectKey
+}
 
 func (s *service) encryptCredentials(creds []byte) ([]byte, error) {
 	if len(creds) == 0 {

@@ -158,7 +158,7 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 	name := c.FormValue("name")
 	sourceType := c.FormValue("source_type")
 
-	config, creds, err := buildConfigAndCreds(sourceType, c)
+	config, creds, file, err := buildConfigAndCreds(sourceType, c)
 	if err != nil {
 		return h.formError(c, err)
 	}
@@ -169,6 +169,7 @@ func (h *SourcesHandler) Create(c echo.Context) error {
 		Name:        name,
 		Config:      config,
 		Credentials: creds,
+		File:        file,
 	})
 	if err != nil {
 		return h.formError(c, err)
@@ -208,7 +209,7 @@ func (h *SourcesHandler) Update(c echo.Context) error {
 		params.Name = &name
 	}
 
-	config, creds, err := buildConfigAndCreds(sourceType, c)
+	config, creds, file, err := buildConfigAndCreds(sourceType, c)
 	if err != nil {
 		return h.formError(c, err)
 	}
@@ -217,6 +218,9 @@ func (h *SourcesHandler) Update(c echo.Context) error {
 	}
 	if len(creds) > 0 {
 		params.Credentials = &creds
+	}
+	if len(file) > 0 {
+		params.File = file
 	}
 
 	_, err = h.core.Update(c.Request().Context(), id, params)
@@ -315,46 +319,48 @@ func (h *SourcesHandler) formError(c echo.Context, err error) error {
 	return c.Redirect(http.StatusSeeOther, referer)
 }
 
-// buildConfigAndCreds extracts type-specific config and credentials from form values
-// or multipart file uploads.
-func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMessage, credentials []byte, err error) {
+// buildConfigAndCreds extracts type-specific config, credentials, and (for file
+// uploads) the raw file bytes from form values or multipart file uploads.
+// File bytes are returned separately from credentials so the service can persist
+// them to the object store instead of the credentials column.
+func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMessage, credentials, file []byte, err error) {
 	switch sources.SourceType(sourceType) {
 	case sources.SourceTypeFileUpload:
-		file, ferr := c.FormFile("file")
+		f, ferr := c.FormFile("file")
 		if ferr != nil {
-			return nil, nil, fmt.Errorf("file is required")
+			return nil, nil, nil, fmt.Errorf("file is required")
 		}
-		src, ferr := file.Open()
+		src, ferr := f.Open()
 		if ferr != nil {
-			return nil, nil, fmt.Errorf("failed to open uploaded file")
+			return nil, nil, nil, fmt.Errorf("failed to open uploaded file")
 		}
 		defer src.Close()
 		content, ferr := io.ReadAll(src)
 		if ferr != nil {
-			return nil, nil, fmt.Errorf("failed to read uploaded file")
+			return nil, nil, nil, fmt.Errorf("failed to read uploaded file")
 		}
 		cfg := map[string]string{
-			"filename": file.Filename,
-			"size":     fmt.Sprintf("%d", file.Size),
+			"filename": f.Filename,
+			"size":     fmt.Sprintf("%d", f.Size),
 		}
 		raw, _ := json.Marshal(cfg)
-		return raw, content, nil
+		return raw, nil, content, nil
 	case sources.SourceTypeWebsite:
 		url := c.FormValue("config_url")
 		if url != "" {
 			cfg := map[string]string{"url": url}
 			raw, _ := json.Marshal(cfg)
-			return raw, nil, nil
+			return raw, nil, nil, nil
 		}
 	case sources.SourceTypeCRMHubSpot, sources.SourceTypeCRMSalesforce:
 		apiKey := c.FormValue("config_api_key")
 		if apiKey != "" {
 			cfg := map[string]string{"api_key": apiKey}
 			raw, _ := json.Marshal(cfg)
-			return raw, []byte(apiKey), nil
+			return raw, []byte(apiKey), nil, nil
 		}
 	}
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
 // extractConfigURL pulls the URL from a website source's config JSON.
