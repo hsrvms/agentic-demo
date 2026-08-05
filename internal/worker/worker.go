@@ -182,7 +182,7 @@ func New(cfg config.Config) (*Worker, error) {
 		Concurrency: cfg.QueueConcurrency,
 		Queues:      cfg.QueueWeights(),
 		MaxRetry:    cfg.QueueMaxRetry,
-	}, deps)
+	}, &deps)
 	if err := workerServer.Start(); err != nil {
 		cleanupWithQueue()
 		return nil, fmt.Errorf("worker server start: %w", err)

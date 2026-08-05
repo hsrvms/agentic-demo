@@ -101,6 +101,64 @@ func TestNewReportTask_InvalidReportType(t *testing.T) {
 	}
 }
 
+func TestNewReportJob_EncodesPayload(t *testing.T) {
+	payload := &ReportPayload{
+		TenantID:   "tenant-2",
+		ReportType: "weekly",
+		FocusAreas: []string{"revenue growth"},
+		ScheduleID: "sch-123",
+	}
+
+	job, err := NewReportJob(payload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if job.Type != TypeReportWeekly {
+		t.Fatalf("expected type %q, got %q", TypeReportWeekly, job.Type)
+	}
+	if job.Queue != QueueReport {
+		t.Fatalf("expected queue %q, got %q", QueueReport, job.Queue)
+	}
+
+	// The payload must round-trip through encoding.
+	d, err := json.Marshal(job.Payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	var decoded ReportPayload
+	if err := json.Unmarshal(d, &decoded); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if decoded.TenantID != "tenant-2" {
+		t.Fatalf("expected TenantID 'tenant-2', got %q", decoded.TenantID)
+	}
+	if decoded.ScheduleID != "sch-123" {
+		t.Fatalf("expected ScheduleID 'sch-123', got %q", decoded.ScheduleID)
+	}
+}
+
+func TestNewReportJob_MissingTenantID(t *testing.T) {
+	_, err := NewReportJob(&ReportPayload{ReportType: "daily"})
+	if err == nil {
+		t.Fatal("expected error for missing TenantID, got nil")
+	}
+}
+
+func TestNewReportJob_MissingReportType(t *testing.T) {
+	_, err := NewReportJob(&ReportPayload{TenantID: "tenant-1"})
+	if err == nil {
+		t.Fatal("expected error for missing ReportType, got nil")
+	}
+}
+
+func TestNewReportJob_InvalidReportType(t *testing.T) {
+	_, err := NewReportJob(&ReportPayload{TenantID: "tenant-1", ReportType: "bogus"})
+	if err == nil {
+		t.Fatal("expected error for invalid ReportType, got nil")
+	}
+}
+
 func TestNewDeliveryTask_EncodesPayload(t *testing.T) {
 	payload := DeliveryPayload{
 		TenantID: "tenant-3",

@@ -59,7 +59,7 @@ func TestIntegration_IngestionJob(t *testing.T) {
 		MaxRetry:    0,
 	}
 
-	srv := NewWorkerServer(cfg, deps)
+	srv := NewWorkerServer(cfg, &deps)
 	if err := srv.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestIntegration_ReportJob(t *testing.T) {
 		MaxRetry:    0,
 	}
 
-	srv := NewWorkerServer(cfg, deps)
+	srv := NewWorkerServer(cfg, &deps)
 	if err := srv.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}

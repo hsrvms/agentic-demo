@@ -21,12 +21,12 @@ import (
 // MapSourceItem converts a domain DataSource into a view model SourceItem.
 func MapSourceItem(ds *sources.DataSource) SourceItem {
 	item := SourceItem{
-		ID:           ds.ID.String(),
-		Name:         ds.Name,
-		SourceType:   string(ds.SourceType),
-		SourceLabel:  sourceTypeLabel(ds.SourceType),
-		Status:       string(ds.Status),
-		StatusIntent: statusIntent(ds.Status),
+		ID:             ds.ID.String(),
+		Name:           ds.Name,
+		SourceType:     string(ds.SourceType),
+		SourceLabel:    sourceTypeLabel(ds.SourceType),
+		Status:         string(ds.Status),
+		StatusIntent:   statusIntent(ds.Status),
 		LastSyncStatus: ds.LastSyncStatus,
 	}
 	if ds.LastSyncAt != nil {
@@ -221,6 +221,18 @@ func MapDashboard(
 	return data
 }
 
+// --- Report type options ---
+
+// ReportTypeOptions returns the available report types for the generate form.
+func ReportTypeOptions() []ReportTypeOption {
+	return []ReportTypeOption{
+		{Value: "daily", Label: "Daily"},
+		{Value: "weekly", Label: "Weekly"},
+		{Value: "monthly", Label: "Monthly"},
+		{Value: "on_demand", Label: "On Demand"},
+	}
+}
+
 // --- Source type options ---
 
 // SourceTypeOptions returns the available source types for the form selector.
@@ -300,7 +312,6 @@ func FormatTimeAgo(t time.Time) string {
 		return fmt.Sprintf("%d days ago", days)
 	}
 }
-
 
 func PrettyJSON(raw json.RawMessage) string {
 	if len(raw) == 0 {
