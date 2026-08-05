@@ -1,5 +1,5 @@
 .PHONY: dev dev-server dev-worker build build-server build-worker build-all run run-server run-worker \
-        test test-cover test-short lint lint-fix generate tidy vet clean \
+        test test-fails test-cover test-short lint lint-fix generate tidy vet clean \
         migrate-up db-ping db-psql db-reset
 
 # ── Environment ────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ run-worker: build-worker
 
 # ── Test ────────────────────────────────────────────────────────────
 test:
-	go test -race ./...
+	gotestsum --format pkgname-and-test-fails --rerun-fails --packages="./..." -- -race ./...
 
 test-cover:
 	go test -race -coverprofile=coverage.out ./...
@@ -70,6 +70,9 @@ test-cover:
 
 test-short:
 	go test -short ./...
+
+test-fails:
+	gotestsum --format pkgname-and-test-fails -- ./internal/...
 
 # ── Lint ────────────────────────────────────────────────────────────
 lint:
