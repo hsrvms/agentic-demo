@@ -238,6 +238,7 @@ func connectAndMigrate(t *testing.T, ctx context.Context, connStr string) (*PgVe
 	}
 
 	store := &PgVectorStore{
+		pool:     pool,
 		queries:  db.New(pool),
 		embedder: &stubEmbedder{dim: 1024},
 	}
@@ -578,6 +579,154 @@ func TestKnowledgeStore_EmbeddingModelRecorded(t *testing.T) {
 	}
 	if model != "text-embedding-v4" {
 		t.Errorf("embedding_model = %q, want text-embedding-v4", model)
+	}
+}
+
+func TestKnowledgeStore_ReplaceSource_ReplacesPriorData(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-replace")
+	source := "quarterly-report"
+
+	// First ingest: one document, two chunks.
+	firstChunks := []domain.Chunk{
+		{
+			ID: "c1", DocumentID: "doc-1", Content: "Revenue grew 15%",
+			Source: source, DocumentType: "report", Date: time.Now(),
+			Metadata: map[string]string{"run": "1"},
+		},
+		{
+			ID: "c2", DocumentID: "doc-1", Content: "Costs fell 5%",
+			Source: source, DocumentType: "report", Date: time.Now(),
+			Metadata: map[string]string{"run": "1"},
+		},
+	}
+	if err := store.ReplaceSource(ctx, tenantID, source, []domain.Document{{
+		ID: "doc-1", Source: source, Content: "Full report v1", Metadata: map[string]string{"version": "1"},
+	}}, firstChunks); err != nil {
+		t.Fatalf("first ReplaceSource failed: %v", err)
+	}
+
+	// Re-ingest the same source: one document with one new chunk.
+	secondChunks := []domain.Chunk{
+		{
+			ID: "c3", DocumentID: "doc-1", Content: "Revenue grew 20%",
+			Source: source, DocumentType: "report", Date: time.Now(),
+			Metadata: map[string]string{"run": "2"},
+		},
+	}
+	if err := store.ReplaceSource(ctx, tenantID, source, []domain.Document{{
+		ID: "doc-1", Source: source, Content: "Full report v2", Metadata: map[string]string{"version": "2"},
+	}}, secondChunks); err != nil {
+		t.Fatalf("second ReplaceSource failed: %v", err)
+	}
+
+	// The prior chunks must be gone — the source holds only the new chunk.
+	stats, err := store.GetStats(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("GetStats failed: %v", err)
+	}
+	if stats[source] != 1 {
+		t.Errorf("source %q chunk count = %d, want 1 (prior chunks replaced)", source, stats[source])
+	}
+
+	results, err := store.Query(ctx, tenantID, "revenue", 10, QueryFilters{})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 chunk after re-ingest, got %d", len(results))
+	}
+	if got := results[0].Chunk.Content; got != "Revenue grew 20%" {
+		t.Errorf("chunk content = %q, want %q", got, "Revenue grew 20%")
+	}
+
+	// The document behind the chunk reflects the latest ingest.
+	doc, err := store.GetDocument(ctx, tenantID, "doc-1")
+	if err != nil {
+		t.Fatalf("GetDocument failed: %v", err)
+	}
+	if doc.Content != "Full report v2" {
+		t.Errorf("document content = %q, want %q", doc.Content, "Full report v2")
+	}
+}
+
+func TestKnowledgeStore_ReplaceSource_OnlyAffectsMatchingSource(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-replace-t")
+
+	// Two distinct sources exist for the tenant.
+	for _, src := range []string{"source-a", "source-b"} {
+		if err := store.ReplaceSource(ctx, tenantID, src, []domain.Document{{
+			ID: src + "-doc", Source: src, Content: "Doc for " + src,
+		}}, []domain.Chunk{{
+			ID: src + "-1", DocumentID: src + "-doc", Content: "chunk of " + src,
+			Source: src, DocumentType: "text", Date: time.Now(),
+		}}); err != nil {
+			t.Fatalf("ReplaceSource %s failed: %v", src, err)
+		}
+	}
+
+	// Re-ingest source-a only; source-b must be untouched.
+	if err := store.ReplaceSource(ctx, tenantID, "source-a", []domain.Document{{
+		ID: "source-a-doc", Source: "source-a", Content: "Doc for source-a v2",
+	}}, []domain.Chunk{{
+		ID: "source-a-2", DocumentID: "source-a-doc", Content: "new chunk of source-a",
+		Source: "source-a", DocumentType: "text", Date: time.Now(),
+	}}); err != nil {
+		t.Fatalf("ReplaceSource source-a failed: %v", err)
+	}
+
+	stats, err := store.GetStats(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("GetStats failed: %v", err)
+	}
+	if stats["source-a"] != 1 {
+		t.Errorf("source-a chunk count = %d, want 1", stats["source-a"])
+	}
+	if stats["source-b"] != 1 {
+		t.Errorf("source-b chunk count = %d, want 1 (untouched)", stats["source-b"])
+	}
+}
+
+func TestKnowledgeStore_ReplaceSource_TenantIsolated(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	source := "shared-ops"
+
+	// Both tenants ingest the same source name.
+	for _, tid := range []domain.TenantID{"tenant-x", "tenant-y"} {
+		docID := string(tid) + "-doc"
+		if err := store.ReplaceSource(ctx, tid, source, []domain.Document{{
+			ID: docID, Source: source, Content: "Doc for " + string(tid),
+		}}, []domain.Chunk{{
+			ID: docID + "-c1", DocumentID: docID, Content: "chunk for " + string(tid),
+			Source: source, DocumentType: "text", Date: time.Now(),
+		}}); err != nil {
+			t.Fatalf("ReplaceSource for %s failed: %v", tid, err)
+		}
+	}
+
+	// Replacing in tenant-x must not touch tenant-y's data.
+	if err := store.ReplaceSource(ctx, "tenant-x", source, []domain.Document{{
+		ID: "tenant-x-doc", Source: source, Content: "Doc for tenant-x v2",
+	}}, []domain.Chunk{{
+		ID: "tenant-x-c2", DocumentID: "tenant-x-doc", Content: "new chunk for tenant-x",
+		Source: source, DocumentType: "text", Date: time.Now(),
+	}}); err != nil {
+		t.Fatalf("ReplaceSource tenant-x failed: %v", err)
+	}
+
+	results, err := store.Query(ctx, "tenant-y", "tenant-y", 10, QueryFilters{})
+	if err != nil {
+		t.Fatalf("Query tenant-y failed: %v", err)
+	}
+	if len(results) != 1 || results[0].Chunk.Content != "chunk for tenant-y" {
+		t.Errorf("tenant-y data changed by tenant-x re-ingest: %+v", results)
 	}
 }
 

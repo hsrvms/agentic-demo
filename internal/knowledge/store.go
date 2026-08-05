@@ -21,6 +21,11 @@ import (
 // KnowledgeStore is the module interface.
 type KnowledgeStore interface {
 	Store(ctx context.Context, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error
+	// ReplaceSource atomically replaces a source's prior documents and chunks
+	// with the given ones. Re-ingesting a source must not accumulate
+	// duplicates, so the old rows for (tenantID, source) are deleted and the
+	// new ones inserted in a single transaction.
+	ReplaceSource(ctx context.Context, tenantID domain.TenantID, source string, docs []domain.Document, chunks []domain.Chunk) error
 	Query(ctx context.Context, tenantID domain.TenantID, text string, topK int, filters QueryFilters) ([]domain.RankedChunk, error)
 	GetDocument(ctx context.Context, tenantID domain.TenantID, documentID string) (domain.Document, error)
 	DeleteTenantData(ctx context.Context, tenantID domain.TenantID) error
@@ -36,6 +41,7 @@ type QueryFilters struct {
 
 // PgVectorStore implements KnowledgeStore backed by Postgres + pgvector.
 type PgVectorStore struct {
+	pool     *pgxpool.Pool
 	queries  *db.Queries
 	embedder Embedder
 }
@@ -51,10 +57,50 @@ type Embedder interface {
 }
 
 func NewPgVectorStore(pool *pgxpool.Pool, embedder Embedder) *PgVectorStore {
-	return &PgVectorStore{queries: db.New(pool), embedder: embedder}
+	return &PgVectorStore{pool: pool, queries: db.New(pool), embedder: embedder}
 }
 
 func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error {
+	if len(chunks) == 0 {
+		return nil
+	}
+	return s.insert(ctx, s.queries, tenantID, docs, chunks)
+}
+
+// ReplaceSource atomically replaces a source's prior documents and chunks. The
+// delete and the insert share one transaction, so re-ingestion never leaves a
+// window of partial state: either the old data is fully replaced or nothing
+// changes. Deleting the source's documents cascades to its chunks via the
+// document_id FK.
+func (s *PgVectorStore) ReplaceSource(ctx context.Context, tenantID domain.TenantID, source string, docs []domain.Document, chunks []domain.Chunk) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin replace tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after Commit
+
+	qtx := s.queries.WithTx(tx)
+
+	if err := qtx.DeleteSourceDocuments(ctx, db.DeleteSourceDocumentsParams{
+		TenantID: string(tenantID),
+		Source:   source,
+	}); err != nil {
+		return fmt.Errorf("delete prior documents for source %s: %w", source, err)
+	}
+
+	if err := s.insert(ctx, qtx, tenantID, docs, chunks); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit replace tx: %w", err)
+	}
+	return nil
+}
+
+// insert persists documents and their chunks through the given queries
+// handle (either the pool-backed queries or a transaction-scoped one).
+func (s *PgVectorStore) insert(ctx context.Context, q *db.Queries, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error {
 	if len(chunks) == 0 {
 		return nil
 	}
@@ -66,7 +112,7 @@ func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, doc
 			return fmt.Errorf("marshal metadata for document %s: %w", doc.ID, err)
 		}
 
-		if err := s.queries.InsertDocument(ctx, db.InsertDocumentParams{
+		if err := q.InsertDocument(ctx, db.InsertDocumentParams{
 			ID:       doc.ID,
 			TenantID: string(tenantID),
 			Source:   doc.Source,
@@ -96,7 +142,7 @@ func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, doc
 			return fmt.Errorf("marshal metadata for chunk %s: %w", chunk.ID, err)
 		}
 
-		err = s.queries.InsertChunk(ctx, db.InsertChunkParams{
+		err = q.InsertChunk(ctx, db.InsertChunkParams{
 			ID:             chunk.ID,
 			TenantID:       string(tenantID),
 			Content:        chunk.Content,
