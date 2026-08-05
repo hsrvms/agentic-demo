@@ -40,8 +40,10 @@ func (m *mockUsageService) ListEvents(_ context.Context, _ string, _, _ int) (*u
 }
 
 type mockReportService struct {
-	page reports.ReportPage
-	err  error
+	page      reports.ReportPage
+	err       error
+	report    reports.StoredReport
+	detailErr error
 }
 
 func (m *mockReportService) Create(_ context.Context, _ *reports.CreateReportParams) (reports.StoredReport, error) {
@@ -49,7 +51,7 @@ func (m *mockReportService) Create(_ context.Context, _ *reports.CreateReportPar
 }
 
 func (m *mockReportService) GetByID(_ context.Context, _ uuid.UUID) (reports.StoredReport, error) {
-	return reports.StoredReport{}, nil
+	return m.report, m.detailErr
 }
 
 func (m *mockReportService) ListByTenant(_ context.Context, _ string, _, _ int) (reports.ReportPage, error) {

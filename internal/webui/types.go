@@ -70,3 +70,44 @@ type SourceDetailData struct {
 	ConfigJSON     string
 	HasCredentials bool
 }
+
+// ReportItem is a single row in the reports list table.
+type ReportItem struct {
+	ID          string
+	Type        string
+	TypeLabel   string
+	TypeIntent  string // "info", "primary", "warning"
+	Title       string
+	Focus       string
+	GeneratedAt string
+}
+
+// ReportListData is the view model for the reports list page.
+type ReportListData struct {
+	Reports    []ReportItem
+	TotalCount int
+	Page       int
+	PageSize   int
+	HasMore    bool
+	NextPage   int
+}
+
+// Citation is a single source reference attached to a generated report.
+type Citation struct {
+	Title string
+	URL   string
+	Source string
+}
+
+// ReportDetailData is the view model for the report detail page.
+type ReportDetailData struct {
+	ID          string
+	Title       string
+	Type        string
+	TypeLabel   string
+	TypeIntent  string
+	Focus       string
+	GeneratedAt string
+	ContentHTML string
+	Citations   []Citation
+}

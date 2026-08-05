@@ -18,6 +18,7 @@ type Server struct {
 	authHandler      *AuthHandler
 	dashboardHandler *DashboardHandler
 	sourcesHandler   *SourcesHandler
+	reportsHandler   *ReportsHandler
 	authService      auth.AuthService
 	tenantService    tenant.TenantService
 	secureCookies    bool
@@ -49,6 +50,13 @@ func WithDashboard(
 func WithSources(sourceCore *sources.HandlerCore) ServerOption {
 	return func(s *Server) {
 		s.sourcesHandler = NewSourcesHandler(sourceCore)
+	}
+}
+
+// WithReports wires the report browsing handler.
+func WithReports(reportService reports.ReportService) ServerOption {
+	return func(s *Server) {
+		s.reportsHandler = NewReportsHandler(reportService)
 	}
 }
 
@@ -101,6 +109,11 @@ func (s *Server) Register(e *echo.Group) {
 	// Sources management routes.
 	if s.sourcesHandler != nil {
 		s.sourcesHandler.Register(authGroup)
+	}
+
+	// Report browsing routes.
+	if s.reportsHandler != nil {
+		s.reportsHandler.Register(authGroup)
 	}
 }
 
