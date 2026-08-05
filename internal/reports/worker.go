@@ -8,6 +8,7 @@ package reports
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/domain"
@@ -61,12 +62,9 @@ func (w *ReportWorker) GenerateReport(ctx context.Context, tenantID domain.Tenan
 
 	// Expand each matched chunk to its full document so the LLM reasons over
 	// complete context. GetDocument is tenant-scoped, so a chunk can only ever
-	// resolve to a document owned by this tenant.
-	retrieved, err := expandDocuments(ctx, tenantID, chunks, w.knowledge)
-	if err != nil {
-		return domain.Report{}, fmt.Errorf("expand documents: %w", err)
-	}
-
+	// resolve to a document owned by this tenant. A missing document degrades
+	// gracefully to the chunk fragment rather than failing the report.
+	retrieved := expandDocuments(ctx, tenantID, chunks, w.knowledge)
 	gatheredContext := BuildContext(retrieved)
 
 	// Phase 2: Run the agent loop.
@@ -97,8 +95,11 @@ func (w *ReportWorker) GenerateReport(ctx context.Context, tenantID domain.Tenan
 // expandDocuments resolves each matched chunk's DocumentID to its full document
 // via the tenant-scoped GetDocument. Multiple chunks that reference the same
 // document are fetched once (deduplicated). A chunk with no document reference
-// falls back to its own content so context is never silently dropped.
-func expandDocuments(ctx context.Context, tenantID domain.TenantID, chunks []domain.RankedChunk, ks knowledge.KnowledgeStore) ([]RetrievedContext, error) {
+// falls back to its own content so context is never dropped. A chunk whose
+// document can no longer be found (e.g. removed by re-ingestion) also falls
+// back to the matched fragment: a single stale document_id must never block the
+// whole report.
+func expandDocuments(ctx context.Context, tenantID domain.TenantID, chunks []domain.RankedChunk, ks knowledge.KnowledgeStore) []RetrievedContext {
 	results := make([]RetrievedContext, 0, len(chunks))
 	seen := make(map[string]bool, len(chunks))
 
@@ -106,28 +107,25 @@ func expandDocuments(ctx context.Context, tenantID domain.TenantID, chunks []dom
 		docID := rc.Chunk.DocumentID
 		similarity := 1.0 - rc.Distance
 
-		if docID == "" {
-			results = append(results, RetrievedContext{
-				Source:       rc.Chunk.Source,
-				DocumentType: rc.Chunk.DocumentType,
-				Similarity:   similarity,
-				Document: domain.Document{
-					ID:      rc.Chunk.ID,
-					Source:  rc.Chunk.Source,
-					Content: rc.Chunk.Content,
-				},
-			})
-			continue
+		doc := domain.Document{
+			ID:      rc.Chunk.ID,
+			Source:  rc.Chunk.Source,
+			Content: rc.Chunk.Content,
 		}
 
-		if seen[docID] {
-			continue
-		}
-		seen[docID] = true
+		if docID != "" {
+			if seen[docID] {
+				continue
+			}
+			seen[docID] = true
 
-		doc, err := ks.GetDocument(ctx, tenantID, docID)
-		if err != nil {
-			return nil, fmt.Errorf("get document %s: %w", docID, err)
+			fullDoc, err := ks.GetDocument(ctx, tenantID, docID)
+			if err != nil {
+				slog.Warn("document behind matched chunk is unavailable; using chunk fragment",
+					"tenant_id", tenantID, "document_id", docID, "error", err)
+			} else {
+				doc = fullDoc
+			}
 		}
 
 		results = append(results, RetrievedContext{
@@ -138,5 +136,5 @@ func expandDocuments(ctx context.Context, tenantID domain.TenantID, chunks []dom
 		})
 	}
 
-	return results, nil
+	return results
 }

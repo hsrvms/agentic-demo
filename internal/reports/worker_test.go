@@ -142,9 +142,11 @@ func TestGenerateReport_GetDocumentIsTenantScoped(t *testing.T) {
 	}
 }
 
-// TestGenerateReport_GetDocumentErrorPropagates verifies a failure to expand a
-// document fails report generation rather than silently dropping context.
-func TestGenerateReport_GetDocumentErrorPropagates(t *testing.T) {
+// TestGenerateReport_GetDocumentErrorFallsBack verifies that a failure to
+// expand a matched chunk to its full document degrades gracefully: report
+// generation still succeeds and the LLM receives the chunk fragment as context
+// rather than the report failing on a single stale document_id.
+func TestGenerateReport_GetDocumentErrorFallsBack(t *testing.T) {
 	ks := &mockKS{
 		chunks: []domain.RankedChunk{{
 			Chunk: domain.Chunk{
@@ -156,11 +158,15 @@ func TestGenerateReport_GetDocumentErrorPropagates(t *testing.T) {
 		}},
 		getDocErr: errors.New("document not found"),
 	}
-	worker := newWorkerForTest(ks, &messageCaptureLLMClient{})
+	llmClient := &messageCaptureLLMClient{}
+	worker := newWorkerForTest(ks, llmClient)
 
 	_, err := worker.GenerateReport(context.Background(), "tenant-a", domain.ReportConfig{Type: domain.ReportDaily})
-	if err == nil {
-		t.Fatal("expected error when GetDocument fails, got nil")
+	if err != nil {
+		t.Fatalf("GenerateReport should not fail when a document is unavailable, got: %v", err)
+	}
+	if !strings.Contains(llmClient.userMessage, "fragment") {
+		t.Errorf("LLM context should fall back to the chunk fragment, got: %q", llmClient.userMessage)
 	}
 }
 

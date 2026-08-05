@@ -299,9 +299,17 @@ func (s *service) storeFile(ctx context.Context, tenantID string, row *db.DataSo
 		return fmt.Errorf("store source file: %w", err)
 	}
 
+	// Once the object is written, any later failure must not leave an orphaned
+	// object behind (the config/Db row would not reference it). Best-effort
+	// remove the object before returning the error; GC is the safety net.
+	cleanup := func(err error) error {
+		_ = s.objectStore.Delete(ctx, domain.TenantID(tenantID), key)
+		return err
+	}
+
 	config, err := withFileObjectKey(row.Config, key)
 	if err != nil {
-		return err
+		return cleanup(err)
 	}
 
 	updated, err := s.repo.Update(ctx, &db.UpdateDataSourceParams{
@@ -312,7 +320,7 @@ func (s *service) storeFile(ctx context.Context, tenantID string, row *db.DataSo
 		Status:      row.Status,
 	})
 	if err != nil {
-		return fmt.Errorf("record source object key: %w", err)
+		return cleanup(fmt.Errorf("record source object key: %w", err))
 	}
 	*row = updated
 	return nil
