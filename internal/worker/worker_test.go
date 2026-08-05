@@ -11,12 +11,19 @@ import (
 
 func TestNewWorker_ShutdownIsIdempotent(t *testing.T) {
 	redisServer := miniredis.RunT(t)
+	endpoint, accessKey, secretKey, useSSL := testutil.StartMinIO(t)
 
 	cfg := config.Config{
 		DatabaseURL:   testutil.StartPostgres(t),
 		RedisURL:      redisServer.Addr(),
 		JWTSecret:     "test-jwt-secret",
 		EncryptionKey: "test-encryption-key",
+		S3Endpoint:    endpoint,
+		S3AccessKey:   accessKey,
+		S3SecretKey:   secretKey,
+		S3Region:      "us-east-1",
+		S3Bucket:      "test-objects",
+		S3UseSSL:      useSSL,
 	}
 
 	worker, err := New(cfg)
