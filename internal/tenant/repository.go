@@ -17,6 +17,8 @@ type Repository interface {
 	ListTenantsByUser(ctx context.Context, userID uuid.UUID) ([]domain.Tenant, error)
 	CreateMembership(ctx context.Context, userID uuid.UUID, tenantID domain.TenantID, role domain.Role) (domain.TenantMembership, error)
 	GetMembership(ctx context.Context, userID uuid.UUID, tenantID domain.TenantID) (domain.TenantMembership, error)
+	// DeleteTenant marks the tenant deleted (soft delete).
+	DeleteTenant(ctx context.Context, tenantID domain.TenantID) error
 }
 
 // pgRepository wraps sqlc-generated queries.
@@ -86,6 +88,13 @@ func (r *pgRepository) GetMembership(ctx context.Context, userID uuid.UUID, tena
 		return domain.TenantMembership{}, ErrMembershipNotFound
 	}
 	return toDomainMembership(&row), nil
+}
+
+func (r *pgRepository) DeleteTenant(ctx context.Context, tenantID domain.TenantID) error {
+	if err := r.queries.DeleteTenant(ctx, string(tenantID)); err != nil {
+		return fmt.Errorf("delete tenant %s: %w", tenantID, err)
+	}
+	return nil
 }
 
 func toDomainTenant(row *db.Tenant) domain.Tenant {

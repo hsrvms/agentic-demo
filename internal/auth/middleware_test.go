@@ -67,6 +67,14 @@ func (m *mockTenantService) IsMember(_ context.Context, _ domain.TenantID, _ uui
 	return m.isMember, nil
 }
 
+func (m *mockTenantService) Delete(_ context.Context, _ domain.TenantID) error {
+	return nil
+}
+
+func (m *mockTenantService) IsAdmin(_ context.Context, _ domain.TenantID, _ uuid.UUID) (bool, error) {
+	return true, nil
+}
+
 // Verify mockTenantService implements the interface.
 var _ tenant.TenantService = (*mockTenantService)(nil)
 

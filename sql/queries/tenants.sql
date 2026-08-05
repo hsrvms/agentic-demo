@@ -19,3 +19,8 @@ ORDER BY t.created_at DESC;
 UPDATE tenants
 SET status = $2, updated_at = now()
 WHERE id = $1;
+
+-- name: DeleteTenant :exec
+UPDATE tenants
+SET status = 'deleted', updated_at = now()
+WHERE id = $1;

@@ -1,0 +1,23 @@
+meta {
+  name: Delete Tenant
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{base_url}}/api/tenants/{{tenant_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 204", function () {
+    expect(res.getStatus()).to.equal(204);
+  });
+
+  console.log("Deleted tenant:", bru.getVar("tenant_id"));
+}

@@ -8,4 +8,5 @@ var (
 	ErrInvalidRole        = errors.New("invalid role: must be 'admin' or 'viewer'")
 	ErrInvalidName        = errors.New("tenant name must not be empty")
 	ErrMembershipNotFound = errors.New("membership not found")
+	ErrRequiresAdmin      = errors.New("admin role required")
 )

@@ -83,6 +83,14 @@ func (m *tenantMockService) IsMember(_ context.Context, tenantID domain.TenantID
 	return m.membership[key], nil
 }
 
+func (m *tenantMockService) Delete(_ context.Context, _ domain.TenantID) error {
+	return nil
+}
+
+func (m *tenantMockService) IsAdmin(_ context.Context, _ domain.TenantID, _ uuid.UUID) (bool, error) {
+	return true, nil
+}
+
 // Compile-time checks.
 var _ auth.AuthService = (*authMockService)(nil)
 var _ tenant.TenantService = (*tenantMockService)(nil)

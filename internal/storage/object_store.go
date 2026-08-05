@@ -25,4 +25,10 @@ type ObjectStore interface {
 	// Delete removes the object at the tenant-scoped key. Removing a
 	// non-existent object is not an error.
 	Delete(ctx context.Context, tenantID domain.TenantID, key string) error
+
+	// DeleteTenant removes every object belonging to the tenant. It is the
+	// bulk teardown for tenant deletion: it deletes all objects under the
+	// tenant/{tenantID}/ prefix, so no fragment survives in the store.
+	// It is not an error when the tenant has no objects.
+	DeleteTenant(ctx context.Context, tenantID domain.TenantID) error
 }
