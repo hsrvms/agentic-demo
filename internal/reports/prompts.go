@@ -29,19 +29,31 @@ func BuildPrompt(config domain.ReportConfig) string {
 	return strings.Join(parts, "; ")
 }
 
-// BuildContext composes retrieved chunks into a context document for the agent loop.
-func BuildContext(chunks []domain.RankedChunk) string {
-	if len(chunks) == 0 {
+// RetrievedContext pairs a matched chunk with the full document it came from.
+// Report generation expands each matched chunk to its complete document so the
+// LLM reasons over full context rather than a fragment.
+type RetrievedContext struct {
+	Source       string
+	DocumentType string
+	Similarity   float64
+	Document     domain.Document
+}
+
+// BuildContext composes retrieved documents into a context document for the
+// agent loop. Each entry carries the full document behind a matched chunk, not
+// just the matched fragment.
+func BuildContext(results []RetrievedContext) string {
+	if len(results) == 0 {
 		return "No relevant data found in the knowledge base. Generate a report noting the lack of data."
 	}
 
 	var b strings.Builder
 	b.WriteString("The following data was retrieved from the knowledge base for this report:\n\n")
 
-	for i, rc := range chunks {
-		b.WriteString(fmt.Sprintf("--- Source %d: %s (%s, similarity: %.2f) ---\n",
-			i+1, rc.Chunk.Source, rc.Chunk.DocumentType, 1.0-rc.Distance))
-		b.WriteString(rc.Chunk.Content)
+	for i, rc := range results {
+		fmt.Fprintf(&b, "--- Source %d: %s (%s, similarity: %.2f) ---\n",
+			i+1, rc.Source, rc.DocumentType, rc.Similarity)
+		b.WriteString(rc.Document.Content)
 		b.WriteString("\n\n")
 	}
 
