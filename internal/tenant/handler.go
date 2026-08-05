@@ -22,6 +22,7 @@ func NewHandler(service TenantService) *Handler {
 func (h *Handler) Register(g *echo.Group, mw ...echo.MiddlewareFunc) {
 	g.POST("/tenants", h.Create, mw...)
 	g.GET("/tenants", h.List, mw...)
+	g.DELETE("/tenants/:id", h.Delete, mw...)
 }
 
 // --- request types ---
@@ -78,4 +79,27 @@ func (h *Handler) List(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, result)
+}
+
+// Delete handles DELETE /tenants/:id. It cascades the tenant's teardown across
+// its object store and knowledge base, then marks the tenant deleted. Only an
+// admin of the tenant may delete it; a non-admin caller is rejected so a
+// viewer cannot delete a tenant.
+func (h *Handler) Delete(c echo.Context) error {
+	tenantID := domain.TenantID(c.Param("id"))
+	userID := domain.GetUserID(c.Request().Context())
+
+	admin, err := h.service.IsAdmin(c.Request().Context(), tenantID, userID)
+	if err != nil {
+		return echo.NewHTTPError(httperr.MapHTTP(err))
+	}
+	if !admin {
+		return echo.NewHTTPError(httperr.MapHTTP(ErrRequiresAdmin))
+	}
+
+	if err := h.service.Delete(c.Request().Context(), tenantID); err != nil {
+		return echo.NewHTTPError(httperr.MapHTTP(err))
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }

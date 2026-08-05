@@ -150,6 +150,61 @@ func TestHandler_Register_Routes(t *testing.T) {
 	}
 	assert.Contains(t, methods["/api/tenants"], "POST")
 	assert.Contains(t, methods["/api/tenants"], "GET")
+	assert.Contains(t, methods["/api/tenants/:id"], "DELETE")
+}
+
+func TestHandler_Delete(t *testing.T) {
+	handler := NewHandler(&stubTenantService{isAdmin: true})
+	e := echo.New()
+
+	userID := uuid.New()
+	ctx := domain.SetUserID(context.Background(), userID)
+	req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/tenants/t_abc123", http.NoBody)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("t_abc123")
+
+	require.NoError(t, handler.Delete(c))
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
+
+func TestHandler_Delete_NotAdmin(t *testing.T) {
+	handler := NewHandler(&stubTenantService{isAdmin: false})
+	e := echo.New()
+
+	userID := uuid.New()
+	ctx := domain.SetUserID(context.Background(), userID)
+	req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/tenants/t_abc123", http.NoBody)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("t_abc123")
+
+	err := handler.Delete(c)
+	require.Error(t, err)
+	var httpErr *echo.HTTPError
+	require.True(t, errors.As(err, &httpErr))
+	assert.Equal(t, http.StatusForbidden, httpErr.Code)
+}
+
+func TestHandler_Delete_NotFound(t *testing.T) {
+	handler := NewHandler(&stubTenantService{isAdmin: true, deleteErr: ErrTenantNotFound})
+	e := echo.New()
+
+	userID := uuid.New()
+	ctx := domain.SetUserID(context.Background(), userID)
+	req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/tenants/t_missing", http.NoBody)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("t_missing")
+
+	err := handler.Delete(c)
+	require.Error(t, err)
+	var httpErr *echo.HTTPError
+	require.True(t, errors.As(err, &httpErr))
+	assert.Equal(t, http.StatusNotFound, httpErr.Code)
 }
 
 // --- stub ---
@@ -159,6 +214,8 @@ type stubTenantService struct {
 	createErr    error
 	listResult   []domain.Tenant
 	listErr      error
+	deleteErr    error
+	isAdmin      bool
 }
 
 func (s *stubTenantService) Create(ctx context.Context, ownerID uuid.UUID, name string) (domain.Tenant, error) {
@@ -187,5 +244,16 @@ func (s *stubTenantService) GetByID(ctx context.Context, tenantID domain.TenantI
 }
 
 func (s *stubTenantService) IsMember(ctx context.Context, tenantID domain.TenantID, userID uuid.UUID) (bool, error) {
-	return true, nil
+	return s.isAdmin, nil
+}
+
+func (s *stubTenantService) IsAdmin(ctx context.Context, tenantID domain.TenantID, userID uuid.UUID) (bool, error) {
+	return s.isAdmin, nil
+}
+
+func (s *stubTenantService) Delete(ctx context.Context, tenantID domain.TenantID) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 // mockRepository implements Repository for unit tests.
@@ -15,6 +16,7 @@ type mockRepository struct {
 	memberships []domain.TenantMembership
 	createErr   error
 	findErr     error
+	deleteErr   error
 }
 
 func newMockRepo() *mockRepository {
@@ -82,9 +84,22 @@ func (m *mockRepository) GetMembership(_ context.Context, userID uuid.UUID, tena
 	return domain.TenantMembership{}, ErrMembershipNotFound
 }
 
+func (m *mockRepository) DeleteTenant(ctx context.Context, tenantID domain.TenantID) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	t, ok := m.tenants[string(tenantID)]
+	if !ok {
+		return ErrTenantNotFound
+	}
+	t.Status = domain.TenantDeleted
+	m.tenants[string(tenantID)] = t
+	return nil
+}
+
 func TestCreate_Success(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, err := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -113,7 +128,7 @@ func TestCreate_Success(t *testing.T) {
 
 func TestCreate_EmptyName(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 
 	_, err := svc.Create(context.Background(), uuid.New(), "")
 	if !errors.Is(err, ErrInvalidName) {
@@ -123,7 +138,7 @@ func TestCreate_EmptyName(t *testing.T) {
 
 func TestCreate_WhitespaceName(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 
 	_, err := svc.Create(context.Background(), uuid.New(), "   ")
 	if !errors.Is(err, ErrInvalidName) {
@@ -133,7 +148,7 @@ func TestCreate_WhitespaceName(t *testing.T) {
 
 func TestAddMember_Success(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -153,7 +168,7 @@ func TestAddMember_Success(t *testing.T) {
 
 func TestAddMember_Duplicate(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -166,7 +181,7 @@ func TestAddMember_Duplicate(t *testing.T) {
 
 func TestAddMember_InvalidRole(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -179,7 +194,7 @@ func TestAddMember_InvalidRole(t *testing.T) {
 
 func TestListByUser(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	_, _ = svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -196,7 +211,7 @@ func TestListByUser(t *testing.T) {
 
 func TestListByUser_NoTenants(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 
 	tenants, err := svc.ListByUser(context.Background(), uuid.New())
 	if err != nil {
@@ -209,7 +224,7 @@ func TestListByUser_NoTenants(t *testing.T) {
 
 func TestGetByID(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	created, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -225,7 +240,7 @@ func TestGetByID(t *testing.T) {
 
 func TestGetByID_NotFound(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 
 	_, err := svc.GetByID(context.Background(), "t_nonexistent")
 	if !errors.Is(err, ErrTenantNotFound) {
@@ -235,7 +250,7 @@ func TestGetByID_NotFound(t *testing.T) {
 
 func TestIsMember_True(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -251,7 +266,7 @@ func TestIsMember_True(t *testing.T) {
 
 func TestIsMember_False(t *testing.T) {
 	repo := newMockRepo()
-	svc := NewService(repo)
+	svc := NewService(repo, nil, nil)
 	ownerID := uuid.New()
 
 	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
@@ -263,4 +278,153 @@ func TestIsMember_False(t *testing.T) {
 	if member {
 		t.Error("expected IsMember = false")
 	}
+}
+
+func TestIsAdmin_OwnerIsAdmin(t *testing.T) {
+	repo := newMockRepo()
+	svc := NewService(repo, nil, nil)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+
+	admin, err := svc.IsAdmin(context.Background(), tenant.ID, ownerID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !admin {
+		t.Error("expected owner to be admin")
+	}
+}
+
+func TestIsAdmin_ViewerIsNotAdmin(t *testing.T) {
+	repo := newMockRepo()
+	svc := NewService(repo, nil, nil)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+	viewerID := uuid.New()
+	_, err := svc.AddMember(context.Background(), tenant.ID, viewerID, domain.RoleViewer)
+	require.NoError(t, err)
+
+	admin, err := svc.IsAdmin(context.Background(), tenant.ID, viewerID)
+	require.NoError(t, err)
+	if admin {
+		t.Error("expected viewer not to be admin")
+	}
+}
+
+func TestIsAdmin_NonMemberIsNotAdmin(t *testing.T) {
+	repo := newMockRepo()
+	svc := NewService(repo, nil, nil)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+
+	admin, err := svc.IsAdmin(context.Background(), tenant.ID, uuid.New())
+	require.NoError(t, err)
+	if admin {
+		t.Error("expected non-member not to be admin")
+	}
+}
+
+func TestDelete_CascadesKnowledgeAndObjects(t *testing.T) {
+	repo := newMockRepo()
+	knowledge := &mockKnowledgeStore{}
+	objects := &mockObjectStore{}
+	svc := NewService(repo, knowledge, objects)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+
+	require.NoError(t, svc.Delete(context.Background(), tenant.ID))
+
+	// The tenant's knowledge base and object store must both be torn down.
+	require.Len(t, knowledge.deletedTenants, 1)
+	require.Equal(t, tenant.ID, knowledge.deletedTenants[0])
+	require.Len(t, objects.deletedTenants, 1)
+	require.Equal(t, tenant.ID, objects.deletedTenants[0])
+
+	// The tenant must now be marked deleted.
+	got, err := svc.GetByID(context.Background(), tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, domain.TenantDeleted, got.Status)
+}
+
+func TestDelete_NotFound(t *testing.T) {
+	repo := newMockRepo()
+	knowledge := &mockKnowledgeStore{}
+	objects := &mockObjectStore{}
+	svc := NewService(repo, knowledge, objects)
+
+	err := svc.Delete(context.Background(), "t_nonexistent")
+	require.ErrorIs(t, err, ErrTenantNotFound)
+
+	// Nothing should have been torn down for a tenant that does not exist.
+	require.Len(t, knowledge.deletedTenants, 0)
+	require.Len(t, objects.deletedTenants, 0)
+}
+
+func TestDelete_ObjectStoreFailureLeavesTenantActive(t *testing.T) {
+	repo := newMockRepo()
+	objects := &mockObjectStore{deleteErr: errors.New("s3 unavailable")}
+	knowledge := &mockKnowledgeStore{}
+	svc := NewService(repo, knowledge, objects)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+
+	err := svc.Delete(context.Background(), tenant.ID)
+	require.Error(t, err)
+
+	// Data is removed before the tenant is marked deleted, so a failure leaves
+	// the tenant active and retryable rather than deleted with fragments.
+	got, err := svc.GetByID(context.Background(), tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, domain.TenantActive, got.Status)
+	require.Len(t, knowledge.deletedTenants, 0)
+}
+
+func TestDelete_KnowledgeFailureLeavesTenantActive(t *testing.T) {
+	repo := newMockRepo()
+	objects := &mockObjectStore{}
+	knowledge := &mockKnowledgeStore{deleteErr: errors.New("db unavailable")}
+	svc := NewService(repo, knowledge, objects)
+	ownerID := uuid.New()
+
+	tenant, _ := svc.Create(context.Background(), ownerID, "Acme Corp")
+
+	err := svc.Delete(context.Background(), tenant.ID)
+	require.Error(t, err)
+
+	got, err := svc.GetByID(context.Background(), tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, domain.TenantActive, got.Status)
+}
+
+// mockKnowledgeStore implements the KnowledgeStore teardown seam for tests.
+type mockKnowledgeStore struct {
+	deletedTenants []domain.TenantID
+	deleteErr      error
+}
+
+func (m *mockKnowledgeStore) DeleteTenantData(_ context.Context, tenantID domain.TenantID) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	m.deletedTenants = append(m.deletedTenants, tenantID)
+	return nil
+}
+
+// mockObjectStore implements the ObjectStore teardown seam for tests.
+type mockObjectStore struct {
+	deletedTenants []domain.TenantID
+	deleteErr      error
+}
+
+func (m *mockObjectStore) DeleteTenant(_ context.Context, tenantID domain.TenantID) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	m.deletedTenants = append(m.deletedTenants, tenantID)
+	return nil
 }

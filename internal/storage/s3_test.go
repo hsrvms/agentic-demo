@@ -80,6 +80,46 @@ func TestS3ObjectStore_TenantIsolation(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestS3ObjectStore_DeleteTenantRemovesAllObjects(t *testing.T) {
+	store := setupS3(t)
+	ctx := context.Background()
+	tenant := domain.TenantID("tenant-a")
+
+	for _, key := range []string{"sources/s1/file", "sources/s2/file", "other/key"} {
+		err := store.Put(ctx, tenant, key, bytes.NewReader([]byte("data")), 4)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, store.DeleteTenant(ctx, tenant))
+
+	for _, key := range []string{"sources/s1/file", "sources/s2/file", "other/key"} {
+		_, err := store.Get(ctx, tenant, key)
+		require.ErrorIs(t, err, ErrNotFound, "key %q should be gone after tenant delete", key)
+	}
+}
+
+func TestS3ObjectStore_DeleteTenantLeavesOtherTenants(t *testing.T) {
+	store := setupS3(t)
+	ctx := context.Background()
+	a := domain.TenantID("tenant-a")
+	b := domain.TenantID("tenant-b")
+
+	require.NoError(t, store.Put(ctx, a, "sources/s1/file", bytes.NewReader([]byte("a")), 1))
+	require.NoError(t, store.Put(ctx, b, "sources/s1/file", bytes.NewReader([]byte("b")), 1))
+
+	require.NoError(t, store.DeleteTenant(ctx, a))
+
+	_, err := store.Get(ctx, a, "sources/s1/file")
+	require.ErrorIs(t, err, ErrNotFound)
+
+	rc, err := store.Get(ctx, b, "sources/s1/file")
+	require.NoError(t, err)
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	require.Equal(t, "b", string(data))
+}
+
 func TestS3ObjectStore_RejectsInvalidKey(t *testing.T) {
 	store := setupS3(t)
 	ctx := context.Background()

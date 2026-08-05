@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/agentic-demo/platform/internal/domain"
@@ -61,5 +62,18 @@ func (s *MemoryObjectStore) Delete(ctx context.Context, tenantID domain.TenantID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.objects, fullKey)
+	return nil
+}
+
+// DeleteTenant implements ObjectStore.
+func (s *MemoryObjectStore) DeleteTenant(ctx context.Context, tenantID domain.TenantID) error {
+	prefix := tenantKeyPrefix(tenantID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for fullKey := range s.objects {
+		if strings.HasPrefix(fullKey, prefix) {
+			delete(s.objects, fullKey)
+		}
+	}
 	return nil
 }

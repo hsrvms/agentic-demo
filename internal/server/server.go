@@ -14,6 +14,8 @@ import (
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/config"
 	"github.com/agentic-demo/platform/internal/db"
+	"github.com/agentic-demo/platform/internal/knowledge"
+	"github.com/agentic-demo/platform/internal/llm"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
@@ -76,7 +78,28 @@ func New(cfg config.Config) (*Server, error) {
 
 	api := e.Group("/api")
 	authService := auth.NewService(auth.NewRepository(queries), []byte(cfg.JWTSecret))
-	tenantService := tenant.NewService(tenant.NewRepository(queries))
+
+	objectStore, err := storage.NewS3ObjectStore(&storage.S3Config{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		cleanupOnError()
+		return nil, fmt.Errorf("create object store: %w", err)
+	}
+
+	embedder := llm.NewDashScopeNativeEmbedder(
+		cfg.DashScopeEmbeddingAPIKey,
+		cfg.DashScopeEmbeddingBaseURL,
+		cfg.EmbeddingModel,
+	)
+	knowledgeStore := knowledge.NewPgVectorStore(pool, embedder)
+
+	tenantService := tenant.NewService(tenant.NewRepository(queries), knowledgeStore, objectStore)
 	authMw := auth.AuthMiddleware(authService)
 	tenantMw := auth.JWTMiddleware(authService, tenantService)
 
@@ -91,19 +114,6 @@ func New(cfg config.Config) (*Server, error) {
 	reports.NewHandler(reportService).Register(api, tenantMw)
 
 	encryptionKey := sha256.Sum256([]byte(cfg.EncryptionKey))
-
-	objectStore, err := storage.NewS3ObjectStore(&storage.S3Config{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		Region:    cfg.S3Region,
-		Bucket:    cfg.S3Bucket,
-		UseSSL:    cfg.S3UseSSL,
-	})
-	if err != nil {
-		cleanupOnError()
-		return nil, fmt.Errorf("create object store: %w", err)
-	}
 
 	cryptService, err := sources.NewAESGCMService(encryptionKey[:])
 	if err != nil {

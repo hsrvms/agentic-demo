@@ -12,4 +12,5 @@ func init() {
 	httperr.Register(ErrAlreadyExists, http.StatusConflict, "membership already exists")
 	httperr.Register(ErrInvalidRole, http.StatusBadRequest, "invalid role: must be 'admin' or 'viewer'")
 	httperr.Register(ErrMembershipNotFound, http.StatusNotFound, "membership not found")
+	httperr.Register(ErrRequiresAdmin, http.StatusForbidden, "admin role required to delete a tenant")
 }

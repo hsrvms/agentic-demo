@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	awsTypes "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // S3Config configures an S3ObjectStore against any S3-compatible service.
@@ -79,11 +79,11 @@ func (s *S3ObjectStore) ensureBucket(ctx context.Context) error {
 	if err == nil {
 		return nil
 	}
-	var ownedByYou *types.BucketAlreadyOwnedByYou
+	var ownedByYou *awsTypes.BucketAlreadyOwnedByYou
 	if errors.As(err, &ownedByYou) {
 		return nil
 	}
-	var alreadyExists *types.BucketAlreadyExists
+	var alreadyExists *awsTypes.BucketAlreadyExists
 	if errors.As(err, &alreadyExists) {
 		return nil
 	}
@@ -119,7 +119,7 @@ func (s *S3ObjectStore) Get(ctx context.Context, tenantID domain.TenantID, key s
 		Key:    aws.String(fullKey),
 	})
 	if err != nil {
-		var notFound *types.NoSuchKey
+		var notFound *awsTypes.NoSuchKey
 		if errors.As(err, &notFound) {
 			return nil, ErrNotFound
 		}
@@ -140,6 +140,49 @@ func (s *S3ObjectStore) Delete(ctx context.Context, tenantID domain.TenantID, ke
 	})
 	if err != nil {
 		return fmt.Errorf("delete object %q: %w", fullKey, err)
+	}
+	return nil
+}
+
+// DeleteTenant implements ObjectStore. It lists every object under the
+// tenant/{tenantID}/ prefix and deletes them in batches, so no fragment of
+// the tenant survives in the bucket. A tenant with no objects is a no-op.
+func (s *S3ObjectStore) DeleteTenant(ctx context.Context, tenantID domain.TenantID) error {
+	prefix := tenantKeyPrefix(tenantID)
+
+	// Collect all keys under the tenant's prefix. ListObjectsV2 pages, so walk
+	// the paginator until nothing remains.
+	var keys []awsTypes.ObjectIdentifier
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("list objects for tenant %s: %w", tenantID, err)
+		}
+		for _, obj := range page.Contents {
+			keys = append(keys, awsTypes.ObjectIdentifier{Key: obj.Key})
+		}
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	// Delete in batches of up to 1000 keys (the API limit) until all are gone.
+	for start := 0; start < len(keys); start += 1000 {
+		end := start + 1000
+		if end > len(keys) {
+			end = len(keys)
+		}
+		if _, err := s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(s.bucket),
+			Delete: &awsTypes.Delete{Objects: keys[start:end]},
+		}); err != nil {
+			return fmt.Errorf("delete objects for tenant %s: %w", tenantID, err)
+		}
 	}
 	return nil
 }

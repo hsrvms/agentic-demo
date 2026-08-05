@@ -1,0 +1,26 @@
+meta {
+  name: Delete Tenant — Not Admin
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{base_url}}/api/tenants/t_other_tenant
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{token}}
+}
+
+script:post-response {
+  test("Status code is 403", function () {
+    expect(res.getStatus()).to.equal(403);
+  });
+
+  const body = res.getBody();
+  test("Error message reports admin role required", function () {
+    expect(body.message).to.equal("admin role required to delete a tenant");
+  });
+}
