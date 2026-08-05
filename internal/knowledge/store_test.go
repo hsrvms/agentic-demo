@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 // similarity ranking deterministic.
 type stubEmbedder struct {
 	dim     int
+	model   string
 	vectors map[string][]float32
 }
 
@@ -38,6 +40,12 @@ func (e *stubEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, 
 }
 
 func (e *stubEmbedder) Dimension() int { return e.dim }
+func (e *stubEmbedder) Model() string {
+	if e.model != "" {
+		return e.model
+	}
+	return "test-embedding"
+}
 
 // unitVector returns a vector with 1.0 at index idx and 0.0 elsewhere.
 // Two identical unit vectors have cosine distance 0; two orthogonal unit
@@ -48,9 +56,26 @@ func unitVector(dim, idx int) []float32 {
 	return v
 }
 
-// migrationSQL reads and returns the initial migration file content.
+// migrationSQL reads and concatenates all migration files in order.
 func migrationSQL() ([]byte, error) {
-	return os.ReadFile("../../sql/migrations/001_initial.sql")
+	entries, err := os.ReadDir("../../sql/migrations")
+	if err != nil {
+		return nil, err
+	}
+
+	var buf []byte
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		b, err := os.ReadFile("../../sql/migrations/" + e.Name())
+		if err != nil {
+			return nil, err
+		}
+		buf = append(buf, b...)
+		buf = append(buf, '\n')
+	}
+	return buf, nil
 }
 
 // setupStore spins up a Postgres+pgvector environment, runs migrations,
@@ -231,6 +256,26 @@ func setupStoreWithEmbedder(t *testing.T, emb Embedder) (*PgVectorStore, func())
 	return store, cleanup
 }
 
+// storeChunks stores the given chunks, deriving one document per chunk so the
+// document_id FK is satisfied. Documents are the full content behind a chunk;
+// here each chunk is its own document for simplicity.
+func storeChunks(store *PgVectorStore, ctx context.Context, tenantID domain.TenantID, chunks []domain.Chunk) error {
+	docs := make([]domain.Document, len(chunks))
+	for i, c := range chunks {
+		if c.DocumentID == "" {
+			c.DocumentID = c.ID
+		}
+		chunks[i] = c
+		docs[i] = domain.Document{
+			ID:       c.DocumentID,
+			Source:   c.Source,
+			Content:  c.Content,
+			Metadata: c.Metadata,
+		}
+	}
+	return store.Store(ctx, tenantID, docs, chunks)
+}
+
 func TestKnowledgeStore_StoreAndQuery(t *testing.T) {
 	// Configure vectors so the query ranks the revenue chunk first:
 	// query and revenue chunk share the same unit vector (distance 0),
@@ -276,7 +321,7 @@ func TestKnowledgeStore_StoreAndQuery(t *testing.T) {
 		},
 	}
 
-	if err := store.Store(ctx, tenantID, chunks); err != nil {
+	if err := storeChunks(store, ctx, tenantID, chunks); err != nil {
 		t.Fatalf("Store failed: %v", err)
 	}
 
@@ -305,10 +350,10 @@ func TestKnowledgeStore_TenantIsolation(t *testing.T) {
 		ID: "cb-1", Content: "Tenant B data", Source: "src", DocumentType: "text", Date: time.Now(),
 	}}
 
-	if err := store.Store(ctx, "tenant-a", chunkA); err != nil {
+	if err := storeChunks(store, ctx, "tenant-a", chunkA); err != nil {
 		t.Fatalf("Store tenant-a failed: %v", err)
 	}
-	if err := store.Store(ctx, "tenant-b", chunkB); err != nil {
+	if err := storeChunks(store, ctx, "tenant-b", chunkB); err != nil {
 		t.Fatalf("Store tenant-b failed: %v", err)
 	}
 
@@ -336,7 +381,7 @@ func TestKnowledgeStore_DeleteTenantData(t *testing.T) {
 		ID: "d-1", Content: "Data to delete", Source: "src", DocumentType: "text", Date: time.Now(),
 	}}
 
-	if err := store.Store(ctx, "tenant-del", chunks); err != nil {
+	if err := storeChunks(store, ctx, "tenant-del", chunks); err != nil {
 		t.Fatalf("Store failed: %v", err)
 	}
 
@@ -365,7 +410,7 @@ func TestKnowledgeStore_GetStats(t *testing.T) {
 		{ID: "s-4", Content: "Source C content", Source: "source-c", DocumentType: "text", Date: time.Now()},
 	}
 
-	if err := store.Store(ctx, "tenant-stats", chunks); err != nil {
+	if err := storeChunks(store, ctx, "tenant-stats", chunks); err != nil {
 		t.Fatalf("Store failed: %v", err)
 	}
 
@@ -398,7 +443,7 @@ func TestKnowledgeStore_QueryWithSourceFilter(t *testing.T) {
 		{ID: "f-3", Content: "Gamma content from src1", Source: "src1", DocumentType: "text", Date: time.Now()},
 	}
 
-	if err := store.Store(ctx, "tenant-filter", chunks); err != nil {
+	if err := storeChunks(store, ctx, "tenant-filter", chunks); err != nil {
 		t.Fatalf("Store failed: %v", err)
 	}
 
@@ -427,5 +472,145 @@ func TestKnowledgeStore_EmptyQuery(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("expected 0 results from empty store, got %d", len(results))
+	}
+}
+
+func TestKnowledgeStore_GetDocument(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-doc")
+
+	chunks := []domain.Chunk{
+		{
+			ID: "cd-1", DocumentID: "doc-1",
+			Content: "First chunk of the full document", Source: "manual", DocumentType: "report",
+			Date: time.Now(), Metadata: map[string]string{"title": "Quarterly Report"},
+		},
+		{
+			ID: "cd-2", DocumentID: "doc-1",
+			Content: "Second chunk of the full document", Source: "manual", DocumentType: "report",
+			Date: time.Now(), Metadata: map[string]string{"title": "Quarterly Report"},
+		},
+	}
+
+	if err := store.Store(ctx, tenantID, []domain.Document{{
+		ID: "doc-1", Source: "manual", Content: "The full parsed document text", Metadata: map[string]string{"title": "Quarterly Report"},
+	}}, chunks); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Query returns chunks carrying their document_id.
+	results, err := store.Query(ctx, tenantID, "full document", 5, QueryFilters{})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for _, r := range results {
+		if r.Chunk.DocumentID != "doc-1" {
+			t.Errorf("chunk document_id = %q, want doc-1", r.Chunk.DocumentID)
+		}
+	}
+
+	// Expand the matched chunk to its full document with one lookup.
+	doc, err := store.GetDocument(ctx, tenantID, "doc-1")
+	if err != nil {
+		t.Fatalf("GetDocument failed: %v", err)
+	}
+	if doc.Content != "The full parsed document text" {
+		t.Errorf("document content = %q, want full parsed text", doc.Content)
+	}
+	if doc.Source != "manual" {
+		t.Errorf("document source = %q, want manual", doc.Source)
+	}
+	if doc.Metadata["title"] != "Quarterly Report" {
+		t.Errorf("document title = %q, want Quarterly Report", doc.Metadata["title"])
+	}
+}
+
+func TestKnowledgeStore_GetDocument_TenantScoped(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	if err := store.Store(ctx, "tenant-a", []domain.Document{{
+		ID: "shared-doc", Source: "src", Content: "Tenant A content",
+	}}, []domain.Chunk{{
+		ID: "ca-1", DocumentID: "shared-doc", Content: "Tenant A content", Source: "src", DocumentType: "text", Date: time.Now(),
+	}}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// The same document ID in another tenant must not resolve.
+	_, err := store.GetDocument(ctx, "tenant-b", "shared-doc")
+	if err == nil {
+		t.Fatal("expected error fetching another tenant's document, got nil")
+	}
+}
+
+func TestKnowledgeStore_EmbeddingModelRecorded(t *testing.T) {
+	emb := &stubEmbedder{dim: 1024, model: "text-embedding-v4"}
+	store, cleanup := setupStoreWithEmbedder(t, emb)
+	defer cleanup()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-model")
+
+	chunks := []domain.Chunk{{
+		ID: "cm-1", DocumentID: "dm-1", Content: "Content to embed", Source: "src", DocumentType: "text", Date: time.Now(),
+	}}
+	docs := []domain.Document{{
+		ID: "dm-1", Source: "src", Content: "Content to embed",
+	}}
+
+	if err := store.Store(ctx, tenantID, docs, chunks); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// The recorded embedding model must match the model actually used by the store.
+	model, err := store.queries.GetChunkEmbeddingModel(ctx, db.GetChunkEmbeddingModelParams{
+		TenantID: string(tenantID),
+		ID:       "cm-1",
+	})
+	if err != nil {
+		t.Fatalf("query embedding_model: %v", err)
+	}
+	if model != "text-embedding-v4" {
+		t.Errorf("embedding_model = %q, want text-embedding-v4", model)
+	}
+}
+
+func TestKnowledgeStore_DeleteTenantData_CascadesDocuments(t *testing.T) {
+	store, cleanup := setupStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-cascade")
+
+	docs := []domain.Document{{
+		ID: "dc-1", Source: "src", Content: "Full document to delete",
+	}}
+	chunks := []domain.Chunk{{
+		ID: "cc-1", DocumentID: "dc-1", Content: "Chunk of the document", Source: "src", DocumentType: "text", Date: time.Now(),
+	}}
+
+	if err := store.Store(ctx, tenantID, docs, chunks); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if err := store.DeleteTenantData(ctx, tenantID); err != nil {
+		t.Fatalf("DeleteTenantData failed: %v", err)
+	}
+
+	// Both the document and its cascaded chunks must be gone.
+	if _, err := store.GetDocument(ctx, tenantID, "dc-1"); err == nil {
+		t.Error("expected error fetching deleted document, got nil")
+	}
+	results, err := store.Query(ctx, tenantID, "document", 5, QueryFilters{})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 chunks after tenant deletion, got %d", len(results))
 	}
 }

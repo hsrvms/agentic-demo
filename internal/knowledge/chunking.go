@@ -72,7 +72,7 @@ func (c *RecursiveChunker) chunkDocument(doc domain.RawDocument) []domain.Chunk 
 				current.Reset()
 			}
 			// Split the large paragraph.
-			subChunks := c.splitBySize(para)
+			subChunks := c.splitBySize(para, doc)
 			chunks = append(chunks, subChunks...)
 			continue
 		}
@@ -91,11 +91,9 @@ func (c *RecursiveChunker) chunkDocument(doc domain.RawDocument) []domain.Chunk 
 	return chunks
 }
 
-func (c *RecursiveChunker) splitBySize(text string) []domain.Chunk {
+func (c *RecursiveChunker) splitBySize(text string, doc domain.RawDocument) []domain.Chunk {
 	runes := []rune(text)
 	var chunks []domain.Chunk
-	doc := domain.RawDocument{Content: text}
-
 	for i := 0; i < len(runes); i += c.ChunkSize - c.ChunkOverlap {
 		end := i + c.ChunkSize
 		if end > len(runes) {
@@ -129,6 +127,7 @@ func (c *RecursiveChunker) makeChunk(content string, doc domain.RawDocument) dom
 		Content:      content,
 		Source:       doc.Metadata["source"],
 		DocumentType: doc.Metadata["document_type"],
+		DocumentID:   doc.ID,
 		Metadata:     metadata,
 	}
 }

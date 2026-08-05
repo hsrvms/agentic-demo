@@ -27,7 +27,7 @@ type mockKnowledgeStore struct {
 	queryCalls atomic.Int32
 }
 
-func (m *mockKnowledgeStore) Store(_ context.Context, _ domain.TenantID, _ []domain.Chunk) error {
+func (m *mockKnowledgeStore) Store(_ context.Context, _ domain.TenantID, _ []domain.Document, _ []domain.Chunk) error {
 	m.storeCalls.Add(1)
 	return nil
 }
@@ -41,6 +41,10 @@ func (m *mockKnowledgeStore) Query(_ context.Context, _ domain.TenantID, _ strin
 
 func (m *mockKnowledgeStore) DeleteTenantData(_ context.Context, _ domain.TenantID) error {
 	return nil
+}
+
+func (m *mockKnowledgeStore) GetDocument(_ context.Context, _ domain.TenantID, _ string) (domain.Document, error) {
+	return domain.Document{}, nil
 }
 
 func (m *mockKnowledgeStore) GetStats(_ context.Context, _ domain.TenantID) (map[string]int, error) {
@@ -67,6 +71,7 @@ func (m *mockEmbedder) Embed(_ context.Context, texts []string) ([][]float32, er
 }
 
 func (m *mockEmbedder) Dimension() int { return 3 }
+func (m *mockEmbedder) Model() string   { return "test-model" }
 
 type mockLLMClient struct {
 	called atomic.Bool

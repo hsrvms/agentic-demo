@@ -55,7 +55,13 @@ RawDocuments into Chunks.
 ### Chunk
 A semantically coherent segment of a document with its vector embedding.
 This is the unit of storage and retrieval in the Knowledge Base. Each chunk
-carries metadata (source, document type, date).
+carries metadata (source, document type, date) and references its source
+Document via `document_id`.
+
+### Document
+The full parsed source text behind a chunk. Each Chunk stored in the
+Knowledge Base references its source Document, so a matched chunk can be
+expanded to complete context with a single lookup.
 
 ### KnowledgeBase
 The collection of all Chunks for a tenant. The Knowledge Base is what the

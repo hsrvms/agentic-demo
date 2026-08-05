@@ -20,8 +20,9 @@ import (
 
 // KnowledgeStore is the module interface.
 type KnowledgeStore interface {
-	Store(ctx context.Context, tenantID domain.TenantID, chunks []domain.Chunk) error
+	Store(ctx context.Context, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error
 	Query(ctx context.Context, tenantID domain.TenantID, text string, topK int, filters QueryFilters) ([]domain.RankedChunk, error)
+	GetDocument(ctx context.Context, tenantID domain.TenantID, documentID string) (domain.Document, error)
 	DeleteTenantData(ctx context.Context, tenantID domain.TenantID) error
 	GetStats(ctx context.Context, tenantID domain.TenantID) (map[string]int, error)
 }
@@ -41,18 +42,39 @@ type PgVectorStore struct {
 
 // Embedder generates vector embeddings for text.
 // This is an internal seam — swap DashScope for local ONNX later.
+// Model returns the identifier of the embedding model in use, which the store
+// records on every chunk it writes for provenance.
 type Embedder interface {
 	Embed(ctx context.Context, texts []string) ([][]float32, error)
 	Dimension() int
+	Model() string
 }
 
 func NewPgVectorStore(pool *pgxpool.Pool, embedder Embedder) *PgVectorStore {
 	return &PgVectorStore{queries: db.New(pool), embedder: embedder}
 }
 
-func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, chunks []domain.Chunk) error {
+func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error {
 	if len(chunks) == 0 {
 		return nil
+	}
+
+	// Persist documents first so the document_id FK on chunks can be satisfied.
+	for _, doc := range docs {
+		metadataJSON, err := json.Marshal(doc.Metadata)
+		if err != nil {
+			return fmt.Errorf("marshal metadata for document %s: %w", doc.ID, err)
+		}
+
+		if err := s.queries.InsertDocument(ctx, db.InsertDocumentParams{
+			ID:       doc.ID,
+			TenantID: string(tenantID),
+			Source:   doc.Source,
+			Content:  doc.Content,
+			Metadata: metadataJSON,
+		}); err != nil {
+			return fmt.Errorf("store document %s: %w", doc.ID, err)
+		}
 	}
 
 	// Generate embeddings for all chunks in one batch.
@@ -66,26 +88,25 @@ func (s *PgVectorStore) Store(ctx context.Context, tenantID domain.TenantID, chu
 		return fmt.Errorf("generate embeddings: %w", err)
 	}
 
-	// Assign embeddings back to chunks.
-	for i := range chunks {
-		chunks[i].Embedding = embeddings[i]
-	}
+	model := s.embedder.Model()
 
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		metadataJSON, err := json.Marshal(chunk.Metadata)
 		if err != nil {
 			return fmt.Errorf("marshal metadata for chunk %s: %w", chunk.ID, err)
 		}
 
 		err = s.queries.InsertChunk(ctx, db.InsertChunkParams{
-			ID:           chunk.ID,
-			TenantID:     string(tenantID),
-			Content:      chunk.Content,
-			Embedding:    pgvector.NewVector(chunk.Embedding),
-			Source:       chunk.Source,
-			DocumentType: chunk.DocumentType,
-			Date:         chunk.Date,
-			Metadata:     metadataJSON,
+			ID:             chunk.ID,
+			TenantID:       string(tenantID),
+			Content:        chunk.Content,
+			Embedding:      pgvector.NewVector(embeddings[i]),
+			Source:         chunk.Source,
+			DocumentType:   chunk.DocumentType,
+			Date:           chunk.Date,
+			Metadata:       metadataJSON,
+			DocumentID:     chunk.DocumentID,
+			EmbeddingModel: model,
 		})
 		if err != nil {
 			return fmt.Errorf("store chunk %s: %w", chunk.ID, err)
@@ -134,6 +155,7 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 				Content:      row.Content,
 				Source:       row.Source,
 				DocumentType: row.DocumentType,
+				DocumentID:   row.DocumentID,
 				Date:         row.Date,
 				Metadata:     metadata,
 			},
@@ -144,8 +166,30 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 	return results, nil
 }
 
+func (s *PgVectorStore) GetDocument(ctx context.Context, tenantID domain.TenantID, documentID string) (domain.Document, error) {
+	row, err := s.queries.GetDocument(ctx, db.GetDocumentParams{
+		ID:       documentID,
+		TenantID: string(tenantID),
+	})
+	if err != nil {
+		return domain.Document{}, fmt.Errorf("get document %s: %w", documentID, err)
+	}
+
+	var metadata map[string]string
+	_ = json.Unmarshal(row.Metadata, &metadata)
+
+	return domain.Document{
+		ID:        row.ID,
+		Source:    row.Source,
+		Content:   row.Content,
+		Metadata:  metadata,
+		CreatedAt: row.CreatedAt,
+	}, nil
+}
+
 func (s *PgVectorStore) DeleteTenantData(ctx context.Context, tenantID domain.TenantID) error {
-	err := s.queries.DeleteTenantChunks(ctx, string(tenantID))
+	// Deleting documents cascades to their chunks via the document_id FK.
+	err := s.queries.DeleteTenantDocuments(ctx, string(tenantID))
 	if err != nil {
 		return fmt.Errorf("delete tenant data: %w", err)
 	}

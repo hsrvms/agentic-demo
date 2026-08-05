@@ -138,3 +138,25 @@ func TestRecursiveChunker_OverlapBetweenChunks(t *testing.T) {
 		}
 	}
 }
+
+func TestRecursiveChunker_StampsDocumentID(t *testing.T) {
+	c := NewRecursiveChunker(50, 10)
+
+	doc := domain.RawDocument{
+		ID:      "doc-42",
+		Content: "A longer passage that splits into several distinct chunks when the chunk size is small enough to force multiple segments.",
+		Metadata: map[string]string{
+			"source": "test",
+		},
+	}
+
+	result := c.Chunk([]domain.RawDocument{doc})
+	if len(result) < 2 {
+		t.Fatalf("expected multiple chunks, got %d", len(result))
+	}
+	for _, chunk := range result {
+		if chunk.DocumentID != "doc-42" {
+			t.Errorf("chunk document_id = %q, want doc-42", chunk.DocumentID)
+		}
+	}
+}
