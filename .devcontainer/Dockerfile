@@ -40,6 +40,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go install github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}
 
+ARG GOTESTSUM_VERSION=v1.13.0
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go install gotest.tools/gotestsum@${GOTESTSUM_VERSION}
+
 # gopls is required by Zed's Go language support; staticcheck complements golangci-lint.
 ARG GOPLS_VERSION=v0.23.0
 RUN --mount=type=cache,target=/go/pkg/mod \
