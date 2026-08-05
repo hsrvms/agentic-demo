@@ -27,9 +27,8 @@ func testHandlerDeps(t *testing.T) (HandlerDeps, *mockConnector) {
 
 	return HandlerDeps{
 		IngestWorker: ingestion.NewIngestWorker(
-			map[string]ingestion.Connector{"crm": conn},
+			&fakeResolver{conn: conn},
 			knowledge.NewRecursiveChunker(100, 20),
-			&mockEmbedder{},
 			ks,
 			usage.NoOpEmitter{},
 			"text-embedding-v4",

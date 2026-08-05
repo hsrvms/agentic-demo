@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync/atomic"
 	"testing"
@@ -60,18 +61,16 @@ func (m *mockConnector) Extract(_ context.Context) ([]domain.RawDocument, error)
 	return []domain.RawDocument{{Content: "test document", Metadata: map[string]string{"source": "test"}}}, nil
 }
 
-type mockEmbedder struct{}
-
-func (m *mockEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
-	result := make([][]float32, len(texts))
-	for i := range texts {
-		result[i] = []float32{0.1, 0.2, 0.3}
-	}
-	return result, nil
+// fakeResolver returns a fixed connector, standing in for the ConnectorResolver
+// seam in handler tests.
+type fakeResolver struct {
+	conn ingestion.Connector
+	err  error
 }
 
-func (m *mockEmbedder) Dimension() int { return 3 }
-func (m *mockEmbedder) Model() string   { return "test-model" }
+func (f *fakeResolver) Resolve(_ context.Context, _ domain.TenantID, _ string) (ingestion.Connector, error) {
+	return f.conn, f.err
+}
 
 type mockLLMClient struct {
 	called atomic.Bool
@@ -93,9 +92,8 @@ func TestIngestHandler_ProcessTask(t *testing.T) {
 	ks := &mockKnowledgeStore{}
 
 	worker := ingestion.NewIngestWorker(
-		map[string]ingestion.Connector{"crm": conn},
+		&fakeResolver{conn: conn},
 		knowledge.NewRecursiveChunker(100, 20),
-		&mockEmbedder{},
 		ks,
 		usage.NoOpEmitter{},
 		"text-embedding-v4",
@@ -117,6 +115,31 @@ func TestIngestHandler_ProcessTask(t *testing.T) {
 	}
 	if ks.storeCalls.Load() != 1 {
 		t.Fatalf("expected 1 Store call, got %d", ks.storeCalls.Load())
+	}
+}
+
+func TestIngestHandler_ResolutionFailureSkipsRetry(t *testing.T) {
+	ks := &mockKnowledgeStore{}
+	worker := ingestion.NewIngestWorker(
+		&fakeResolver{err: ingestion.ErrResolutionFailed},
+		knowledge.NewRecursiveChunker(100, 20),
+		ks,
+		usage.NoOpEmitter{},
+		"text-embedding-v4",
+	)
+
+	handler := &IngestHandler{worker: worker}
+	payload := IngestionPayload{TenantID: "tenant-1", SourceID: "crm"}
+	data, _ := json.Marshal(payload)
+	task := asynq.NewTask(TypeIngestionManual, data)
+
+	err := handler.ProcessTask(context.Background(), task)
+	if err == nil {
+		t.Fatal("expected error for failed resolution")
+	}
+	// A failed resolution is permanent — the queue must not retry it.
+	if !errors.Is(err, asynq.SkipRetry) {
+		t.Errorf("expected asynq.SkipRetry, got %v", err)
 	}
 }
 
@@ -311,9 +334,8 @@ func TestRegisterHandlers(t *testing.T) {
 
 	deps := HandlerDeps{
 		IngestWorker: ingestion.NewIngestWorker(
-			map[string]ingestion.Connector{"test": conn},
+			&fakeResolver{conn: conn},
 			knowledge.NewRecursiveChunker(100, 20),
-			&mockEmbedder{},
 			ks,
 			usage.NoOpEmitter{},
 			"text-embedding-v4",
