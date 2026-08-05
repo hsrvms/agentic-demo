@@ -8,6 +8,9 @@ ON CONFLICT (id) DO UPDATE SET
     content  = EXCLUDED.content,
     metadata = EXCLUDED.metadata;
 
+-- name: DeleteSourceDocuments :exec
+DELETE FROM documents WHERE tenant_id = $1 AND source = $2;
+
 -- name: GetDocument :one
 SELECT id, tenant_id, source, content, metadata, created_at
 FROM documents

@@ -91,8 +91,13 @@ func (w *IngestWorker) Ingest(ctx context.Context, tenantID domain.TenantID, sou
 		})
 	}
 
-	// 6. Store documents and chunks (embeddings generated internally by the store).
-	if err := w.store.Store(ctx, tenantID, documents, unique); err != nil {
+	// 6. Replace this source's prior documents and chunks atomically, so
+	// re-ingesting a source never accumulates duplicates. The source name is
+	// taken from the extracted documents (e.g. the uploaded filename).
+	if len(documents) == 0 {
+		return domain.IngestionResult{}, fmt.Errorf("no documents extracted from %s", sourceID)
+	}
+	if err := w.store.ReplaceSource(ctx, tenantID, documents[0].Source, documents, unique); err != nil {
 		return domain.IngestionResult{}, fmt.Errorf("store chunks: %w", err)
 	}
 

@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const deleteSourceDocuments = `-- name: DeleteSourceDocuments :exec
+DELETE FROM documents WHERE tenant_id = $1 AND source = $2
+`
+
+type DeleteSourceDocumentsParams struct {
+	TenantID string `json:"tenant_id"`
+	Source   string `json:"source"`
+}
+
+func (q *Queries) DeleteSourceDocuments(ctx context.Context, arg DeleteSourceDocumentsParams) error {
+	_, err := q.db.Exec(ctx, deleteSourceDocuments, arg.TenantID, arg.Source)
+	return err
+}
+
 const deleteTenantDocuments = `-- name: DeleteTenantDocuments :exec
 DELETE FROM documents WHERE tenant_id = $1
 `

@@ -33,6 +33,11 @@ func (m *mockKnowledgeStore) Store(_ context.Context, _ domain.TenantID, _ []dom
 	return nil
 }
 
+func (m *mockKnowledgeStore) ReplaceSource(_ context.Context, _ domain.TenantID, _ string, _ []domain.Document, _ []domain.Chunk) error {
+	m.storeCalls.Add(1)
+	return nil
+}
+
 func (m *mockKnowledgeStore) Query(_ context.Context, _ domain.TenantID, _ string, _ int, _ knowledge.QueryFilters) ([]domain.RankedChunk, error) {
 	m.queryCalls.Add(1)
 	return []domain.RankedChunk{
