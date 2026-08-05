@@ -16,20 +16,34 @@ import (
 type TenantID string
 
 // RawDocument is unparsed content extracted by a connector.
-// The chunker converts these into Chunks.
+// The chunker converts these into Chunks. ID is the stable identifier the
+// chunker stamps on every chunk produced from this document.
 type RawDocument struct {
+	ID       string
 	Content  string
 	Metadata map[string]string // source, document_type, title, etc.
 }
 
+// Document is the full parsed source text behind a chunk. Each chunk stored in
+// the Knowledge Base references its source Document via Chunk.DocumentID, so a
+// matched chunk can be expanded to complete context with a single lookup.
+type Document struct {
+	ID        string
+	Source    string
+	Content   string
+	Metadata  map[string]string // document_type, title, etc.
+	CreatedAt time.Time
+}
+
 // Chunk is a segment of a document with its vector embedding.
-// This is the unit of storage in the Knowledge Store.
+// This is the unit of storage in the Knowledge Store. Embedding is owned
+// internally by the store — callers never set it.
 type Chunk struct {
 	ID           string
 	Content      string
-	Embedding    []float32
 	Source       string
 	DocumentType string
+	DocumentID   string
 	Date         time.Time
 	Metadata     map[string]string
 }

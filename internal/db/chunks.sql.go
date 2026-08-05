@@ -13,13 +13,25 @@ import (
 	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
-const deleteTenantChunks = `-- name: DeleteTenantChunks :exec
-DELETE FROM chunks WHERE tenant_id = $1
+const getChunkEmbeddingModel = `-- name: GetChunkEmbeddingModel :one
+
+SELECT embedding_model
+FROM chunks
+WHERE tenant_id = $1 AND id = $2
 `
 
-func (q *Queries) DeleteTenantChunks(ctx context.Context, tenantID string) error {
-	_, err := q.db.Exec(ctx, deleteTenantChunks, tenantID)
-	return err
+type GetChunkEmbeddingModelParams struct {
+	TenantID string `json:"tenant_id"`
+	ID       string `json:"id"`
+}
+
+// Chunk queries for the knowledge store.
+// All queries are tenant-scoped — tenant_id is always required.
+func (q *Queries) GetChunkEmbeddingModel(ctx context.Context, arg GetChunkEmbeddingModelParams) (string, error) {
+	row := q.db.QueryRow(ctx, getChunkEmbeddingModel, arg.TenantID, arg.ID)
+	var embedding_model string
+	err := row.Scan(&embedding_model)
+	return embedding_model, err
 }
 
 const getChunkStats = `-- name: GetChunkStats :many
@@ -55,29 +67,30 @@ func (q *Queries) GetChunkStats(ctx context.Context, tenantID string) ([]GetChun
 }
 
 const insertChunk = `-- name: InsertChunk :exec
-
-INSERT INTO chunks (id, tenant_id, content, embedding, source, document_type, date, metadata)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO chunks (id, tenant_id, content, embedding, source, document_type, date, metadata, document_id, embedding_model)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (id) DO UPDATE SET
-    content   = EXCLUDED.content,
-    embedding = EXCLUDED.embedding,
-    metadata  = EXCLUDED.metadata,
-    date      = EXCLUDED.date
+    content         = EXCLUDED.content,
+    embedding       = EXCLUDED.embedding,
+    metadata        = EXCLUDED.metadata,
+    date            = EXCLUDED.date,
+    document_id     = EXCLUDED.document_id,
+    embedding_model = EXCLUDED.embedding_model
 `
 
 type InsertChunkParams struct {
-	ID           string             `json:"id"`
-	TenantID     string             `json:"tenant_id"`
-	Content      string             `json:"content"`
-	Embedding    pgvector_go.Vector `json:"embedding"`
-	Source       string             `json:"source"`
-	DocumentType string             `json:"document_type"`
-	Date         time.Time          `json:"date"`
-	Metadata     []byte             `json:"metadata"`
+	ID             string             `json:"id"`
+	TenantID       string             `json:"tenant_id"`
+	Content        string             `json:"content"`
+	Embedding      pgvector_go.Vector `json:"embedding"`
+	Source         string             `json:"source"`
+	DocumentType   string             `json:"document_type"`
+	Date           time.Time          `json:"date"`
+	Metadata       []byte             `json:"metadata"`
+	DocumentID     string             `json:"document_id"`
+	EmbeddingModel string             `json:"embedding_model"`
 }
 
-// Chunk queries for the knowledge store.
-// All queries are tenant-scoped — tenant_id is always required.
 func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error {
 	_, err := q.db.Exec(ctx, insertChunk,
 		arg.ID,
@@ -88,6 +101,8 @@ func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) error 
 		arg.DocumentType,
 		arg.Date,
 		arg.Metadata,
+		arg.DocumentID,
+		arg.EmbeddingModel,
 	)
 	return err
 }
@@ -99,6 +114,7 @@ SELECT c.id,
        c.document_type,
        c.date,
        c.metadata,
+       c.document_id,
        (c.embedding <=> $2)::float8 AS distance
 FROM chunks c
 WHERE c.tenant_id = $1
@@ -125,6 +141,7 @@ type QueryChunksRow struct {
 	DocumentType string    `json:"document_type"`
 	Date         time.Time `json:"date"`
 	Metadata     []byte    `json:"metadata"`
+	DocumentID   string    `json:"document_id"`
 	Distance     float64   `json:"distance"`
 }
 
@@ -151,6 +168,7 @@ func (q *Queries) QueryChunks(ctx context.Context, arg QueryChunksParams) ([]Que
 			&i.DocumentType,
 			&i.Date,
 			&i.Metadata,
+			&i.DocumentID,
 			&i.Distance,
 		); err != nil {
 			return nil, err

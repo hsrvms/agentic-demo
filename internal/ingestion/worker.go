@@ -79,8 +79,19 @@ func (w *IngestWorker) Ingest(ctx context.Context, tenantID domain.TenantID, sou
 		unique[i].Date = time.Now()
 	}
 
-	// 6. Store chunks (embeddings generated internally by the store).
-	if err := w.store.Store(ctx, tenantID, unique); err != nil {
+	// Build full documents so the store can persist and link them to chunks.
+	documents := make([]domain.Document, 0, len(docs))
+	for _, d := range docs {
+		documents = append(documents, domain.Document{
+			ID:       d.ID,
+			Source:   d.Metadata["source"],
+			Content:  d.Content,
+			Metadata: d.Metadata,
+		})
+	}
+
+	// 6. Store documents and chunks (embeddings generated internally by the store).
+	if err := w.store.Store(ctx, tenantID, documents, unique); err != nil {
 		return domain.IngestionResult{}, fmt.Errorf("store chunks: %w", err)
 	}
 

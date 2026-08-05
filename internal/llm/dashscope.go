@@ -303,6 +303,8 @@ func NewDashScopeNativeEmbedder(apiKey, baseURL, model string) *DashScopeNativeE
 
 func (e *DashScopeNativeEmbedder) Dimension() int { return e.dim }
 
+func (e *DashScopeNativeEmbedder) Model() string { return e.model }
+
 func (e *DashScopeNativeEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	reqBody := nativeEmbeddingRequest{
 		Model: e.model,

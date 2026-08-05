@@ -13,15 +13,17 @@ import (
 )
 
 type Chunk struct {
-	ID           string             `json:"id"`
-	TenantID     string             `json:"tenant_id"`
-	Content      string             `json:"content"`
-	Embedding    pgvector_go.Vector `json:"embedding"`
-	Source       string             `json:"source"`
-	DocumentType string             `json:"document_type"`
-	Date         time.Time          `json:"date"`
-	Metadata     []byte             `json:"metadata"`
-	CreatedAt    time.Time          `json:"created_at"`
+	ID             string             `json:"id"`
+	TenantID       string             `json:"tenant_id"`
+	Content        string             `json:"content"`
+	Embedding      pgvector_go.Vector `json:"embedding"`
+	Source         string             `json:"source"`
+	DocumentType   string             `json:"document_type"`
+	Date           time.Time          `json:"date"`
+	Metadata       []byte             `json:"metadata"`
+	CreatedAt      time.Time          `json:"created_at"`
+	DocumentID     string             `json:"document_id"`
+	EmbeddingModel string             `json:"embedding_model"`
 }
 
 type DataSourceConfig struct {
@@ -36,6 +38,15 @@ type DataSourceConfig struct {
 	LastSyncStatus pgtype.Text        `json:"last_sync_status"`
 	CreatedAt      time.Time          `json:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at"`
+}
+
+type Document struct {
+	ID        string    `json:"id"`
+	TenantID  string    `json:"tenant_id"`
+	Source    string    `json:"source"`
+	Content   string    `json:"content"`
+	Metadata  []byte    `json:"metadata"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Invoice struct {
