@@ -93,6 +93,32 @@ func TestService_Create_FileUploadWithoutBytesNoObject(t *testing.T) {
 	require.Empty(t, objectStore.putKeys)
 }
 
+// TestService_Create_FileUploadCleansUpOrphanOnFailure verifies that when the
+// config update fails after the file bytes are written to the object store, the
+// just-uploaded object is best-effort removed so no orphaned object is left
+// behind that no config references.
+func TestService_Create_FileUploadCleansUpOrphanOnFailure(t *testing.T) {
+	repo := &mockRepo{updateErr: errors.New("config update failed")}
+	objectStore := newMockObjectStore()
+	svc := NewService(repo, &mockCrypt{}, &mockTester{}, &mockJobQueue{}, objectStore)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateDataSourceParams{
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeFileUpload,
+		Name:       "Notes",
+		Config:     json.RawMessage(`{"filename": "notes.txt", "size": "5"}`),
+		File:       []byte("hello"),
+	})
+	require.Error(t, err)
+
+	// The object was written, then cleaned up after the failed update.
+	require.Len(t, objectStore.putKeys, 1)
+	require.Len(t, objectStore.deleteKeys, 1)
+	assert.Equal(t, objectStore.putKeys[0], objectStore.deleteKeys[0])
+	assert.Empty(t, objectStore.objects)
+}
+
 func TestService_Delete_BestEffortDeletesObject(t *testing.T) {
 	repo := newMockRepo()
 	objectStore := newMockObjectStore()
@@ -419,7 +445,8 @@ func (m *mockObjectStore) Delete(_ context.Context, tenantID domain.TenantID, ke
 
 // mockRepo is a simplified in-memory repository for service tests.
 type mockRepo struct {
-	sources []db.DataSourceConfig
+	sources   []db.DataSourceConfig
+	updateErr error
 }
 
 func newMockRepo() *mockRepo {
@@ -474,6 +501,9 @@ func (m *mockRepo) CountByTenant(ctx context.Context, tenantID string) (int32, e
 }
 
 func (m *mockRepo) Update(ctx context.Context, params *db.UpdateDataSourceParams) (db.DataSourceConfig, error) {
+	if m.updateErr != nil {
+		return db.DataSourceConfig{}, m.updateErr
+	}
 	if len(m.sources) == 0 {
 		return db.DataSourceConfig{}, ErrNotFound
 	}

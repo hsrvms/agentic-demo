@@ -100,11 +100,10 @@ func (s *PgVectorStore) ReplaceSource(ctx context.Context, tenantID domain.Tenan
 
 // insert persists documents and their chunks through the given queries
 // handle (either the pool-backed queries or a transaction-scoped one).
+// Documents are always persisted, independent of whether any chunks survive
+// dedup, so a source that yields documents but no chunks still replaces its
+// prior data cleanly instead of being wiped.
 func (s *PgVectorStore) insert(ctx context.Context, q *db.Queries, tenantID domain.TenantID, docs []domain.Document, chunks []domain.Chunk) error {
-	if len(chunks) == 0 {
-		return nil
-	}
-
 	// Persist documents first so the document_id FK on chunks can be satisfied.
 	for _, doc := range docs {
 		metadataJSON, err := json.Marshal(doc.Metadata)
@@ -121,6 +120,10 @@ func (s *PgVectorStore) insert(ctx context.Context, q *db.Queries, tenantID doma
 		}); err != nil {
 			return fmt.Errorf("store document %s: %w", doc.ID, err)
 		}
+	}
+
+	if len(chunks) == 0 {
+		return nil
 	}
 
 	// Generate embeddings for all chunks in one batch.
@@ -193,7 +196,9 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 	results := make([]domain.RankedChunk, 0, len(rows))
 	for _, row := range rows {
 		var metadata map[string]string
-		_ = json.Unmarshal(row.Metadata, &metadata)
+		if err := json.Unmarshal(row.Metadata, &metadata); err != nil {
+			return nil, fmt.Errorf("unmarshal metadata for chunk %s: %w", row.ID, err)
+		}
 
 		results = append(results, domain.RankedChunk{
 			Chunk: domain.Chunk{
@@ -222,7 +227,9 @@ func (s *PgVectorStore) GetDocument(ctx context.Context, tenantID domain.TenantI
 	}
 
 	var metadata map[string]string
-	_ = json.Unmarshal(row.Metadata, &metadata)
+	if err := json.Unmarshal(row.Metadata, &metadata); err != nil {
+		return domain.Document{}, fmt.Errorf("unmarshal metadata for document %s: %w", row.ID, err)
+	}
 
 	return domain.Document{
 		ID:        row.ID,

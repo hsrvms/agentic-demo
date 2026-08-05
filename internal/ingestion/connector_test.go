@@ -15,14 +15,18 @@ import (
 // sources keyed by source ID (it deliberately does not scope by tenant, so the
 // resolver's own tenant check is exercised) and records MarkError calls.
 type fakeSourceReader struct {
-	sources   map[string]Source // key: sourceID
-	marked    []string          // sourceIDs marked error
-	getCalls  []string          // tenantID/sourceID tuples passed to GetProjection
-	markError func(ctx context.Context, tenantID domain.TenantID, sourceID, message string) error
+	sources    map[string]Source // key: sourceID
+	marked     []string          // sourceIDs marked error
+	getCalls   []string          // tenantID/sourceID tuples passed to GetProjection
+	projectErr error             // error returned by GetProjection, when set
+	markError  func(ctx context.Context, tenantID domain.TenantID, sourceID, message string) error
 }
 
 func (f *fakeSourceReader) GetProjection(ctx context.Context, tenantID domain.TenantID, sourceID string) (Source, error) {
 	f.getCalls = append(f.getCalls, string(tenantID)+"/"+sourceID)
+	if f.projectErr != nil {
+		return Source{}, f.projectErr
+	}
 	src, ok := f.sources[sourceID]
 	if !ok {
 		return Source{}, ErrSourceNotFound
@@ -117,9 +121,31 @@ func TestConnectorResolver_MissingSource(t *testing.T) {
 	if !errors.Is(err, ErrResolutionFailed) {
 		t.Fatalf("expected ErrResolutionFailed wrapping, got %v", err)
 	}
-	// A missing source is not marked error — there is no source to record on.
-	if len(reader.marked) != 0 {
-		t.Errorf("expected no MarkError for missing source, got %v", reader.marked)
+	// MarkError is attempted best-effort on any load failure, but the underlying
+	// reader no-ops for a source that does not exist.
+	if len(reader.marked) != 1 || reader.marked[0] != "nope" {
+		t.Errorf("expected MarkError attempted for missing source, got %v", reader.marked)
+	}
+}
+
+// TestConnectorResolver_LoadFailureMarksSourceError verifies that a source that
+// exists but cannot be projected (e.g. a decryption failure) is flipped to the
+// error state so the failure is surfaced and retried manually (story 8).
+func TestConnectorResolver_LoadFailureMarksSourceError(t *testing.T) {
+	objects := storage.NewMemoryObjectStore()
+	reader := &fakeSourceReader{
+		sources:    map[string]Source{},
+		projectErr: errors.New("decrypt failed"),
+	}
+
+	resolver := NewConnectorResolver(reader, objects)
+
+	_, err := resolver.Resolve(context.Background(), domain.TenantID("tenant-a"), "abc")
+	if !errors.Is(err, ErrResolutionFailed) {
+		t.Fatalf("expected ErrResolutionFailed, got %v", err)
+	}
+	if len(reader.marked) != 1 || reader.marked[0] != "abc" {
+		t.Errorf("expected MarkError on load failure, got %v", reader.marked)
 	}
 }
 

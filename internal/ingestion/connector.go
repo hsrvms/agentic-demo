@@ -97,6 +97,11 @@ func NewConnectorResolver(sources SourceReader, objects ObjectReader) ConnectorR
 func (r *connectorResolver) Resolve(ctx context.Context, tenantID domain.TenantID, sourceID string) (Connector, error) {
 	src, err := r.sources.GetProjection(ctx, tenantID, sourceID)
 	if err != nil {
+		// Best-effort: flip the source to error so a broken source is surfaced
+		// and retried manually rather than silently retried. A source that
+		// cannot be loaded at all (e.g. not found) is still reported as a
+		// permanent resolution failure so the queue skips it.
+		_ = r.sources.MarkError(ctx, tenantID, sourceID, err.Error())
 		return nil, resolutionFailed(fmt.Errorf("load source %s: %w", sourceID, err))
 	}
 

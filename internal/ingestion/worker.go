@@ -25,7 +25,6 @@ type IngestWorker struct {
 	chunker        knowledge.Chunker
 	store          knowledge.KnowledgeStore
 	emitter        usage.UsageEmitter
-	dedup          *Dedup
 	embeddingModel string
 }
 
@@ -41,7 +40,6 @@ func NewIngestWorker(
 		chunker:        chunker,
 		store:          store,
 		emitter:        emitter,
-		dedup:          NewDedup(),
 		embeddingModel: embeddingModel,
 	}
 }
@@ -65,10 +63,14 @@ func (w *IngestWorker) Ingest(ctx context.Context, tenantID domain.TenantID, sou
 	// 3. Chunk documents.
 	chunks := w.chunker.Chunk(docs)
 
-	// 4. Deduplicate.
+	// 4. Deduplicate within this run only. A fresh Dedup per ingest keeps
+	// re-ingestion of the same source from collapsing every chunk (which would
+	// otherwise hand ReplaceSource an empty set and wipe the source's prior
+	// data), while still collapsing duplicate content within this single run.
+	dedup := NewDedup()
 	unique := make([]domain.Chunk, 0, len(chunks))
 	for _, chunk := range chunks {
-		if w.dedup.Seen(chunk.Content) {
+		if dedup.Seen(chunk.Content) {
 			continue
 		}
 		unique = append(unique, chunk)
