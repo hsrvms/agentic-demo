@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -74,7 +75,13 @@ func (h *IngestHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 
 	_, err := h.worker.Ingest(ctx, domain.TenantID(payload.TenantID), payload.SourceID)
 	if err != nil {
-		return fmt.Errorf("ingest %s/%s: %w", payload.TenantID, payload.SourceID, err)
+		wrapped := fmt.Errorf("ingest %s/%s: %w", payload.TenantID, payload.SourceID, err)
+		// A failed resolution marks the source error and is retried manually —
+		// do not let the queue retry and spam a broken source.
+		if errors.Is(err, ingestion.ErrResolutionFailed) {
+			return errors.Join(wrapped, asynq.SkipRetry)
+		}
+		return wrapped
 	}
 	return nil
 }

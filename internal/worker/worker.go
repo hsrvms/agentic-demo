@@ -3,6 +3,7 @@ package worker
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,8 @@ import (
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
+	"github.com/agentic-demo/platform/internal/sources"
+	"github.com/agentic-demo/platform/internal/storage"
 	"github.com/agentic-demo/platform/internal/tools"
 	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/hibiken/asynq"
@@ -91,10 +94,35 @@ func New(cfg config.Config) (*Worker, error) {
 	}
 
 	toolRegistry := tools.NewRegistry(usageEmitter)
+
+	// Object store backing uploaded file bytes (MinIO in development).
+	objectStore, err := storage.NewS3ObjectStore(&storage.S3Config{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		cleanupWithEmitter()
+		return nil, fmt.Errorf("create object store: %w", err)
+	}
+
+	// The ConnectorResolver turns a tenant-scoped DataSource into a Connector
+	// at ingest time, using the Sources module's reader and the object store.
+	encryptionKey := sha256.Sum256([]byte(cfg.EncryptionKey))
+	cryptService, err := sources.NewAESGCMService(encryptionKey[:])
+	if err != nil {
+		cleanupWithEmitter()
+		return nil, fmt.Errorf("create data source crypto service: %w", err)
+	}
+	sourceReader := sources.NewReader(sources.NewRepository(queries), cryptService)
+	resolver := ingestion.NewConnectorResolver(sourceReader, objectStore)
+
 	ingestWorker := ingestion.NewIngestWorker(
-		map[string]ingestion.Connector{},
+		resolver,
 		knowledge.NewRecursiveChunker(1000, 200),
-		embedder,
 		knowledgeStore,
 		usageEmitter,
 		cfg.EmbeddingModel,

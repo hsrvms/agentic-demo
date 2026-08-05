@@ -3,9 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"io"
 
 	"github.com/agentic-demo/platform/internal/domain"
 )
@@ -17,29 +15,47 @@ type Connector interface {
 	Extract(ctx context.Context) ([]domain.RawDocument, error)
 }
 
-// FileConnector reads a file and extracts its content as a single document.
-// Phase 0 supports plain text and CSV. PDF/DOCX added in Phase 1.
+// FileConnector reads an uploaded file's bytes from the object store and
+// extracts its content as a single document. It never reads from a local
+// path — the bytes live in the tenant-scoped object store, so the connector
+// survives worker restarts and is tenant-isolated by construction.
 type FileConnector struct {
-	Path string
+	tenantID  domain.TenantID
+	sourceID  string
+	objectKey string // tenant-relative key into the object store
+	filename  string
+	docType   string
+	objects   ObjectReader
 }
 
+// Extract reads the object referenced by the config and returns it as a single
+// RawDocument. The document ID is the source ID, stable across re-ingestion so
+// a source's documents can be replaced without accumulating duplicates.
 func (c *FileConnector) Extract(ctx context.Context) ([]domain.RawDocument, error) {
-	content, err := os.ReadFile(c.Path)
-	if err != nil {
-		return nil, fmt.Errorf("read file %s: %w", c.Path, err)
+	// Defense-in-depth: never read a key that could escape the tenant's prefix.
+	if err := validateObjectKey(c.objectKey); err != nil {
+		return nil, fmt.Errorf("%w: %s", err, c.objectKey)
 	}
 
-	ext := strings.ToLower(filepath.Ext(c.Path))
-	docType := extensionToDocType(ext)
-	filename := filepath.Base(c.Path)
+	rc, err := c.objects.Get(ctx, c.tenantID, c.objectKey)
+	if err != nil {
+		return nil, fmt.Errorf("read file %s: %w", c.objectKey, err)
+	}
+	defer rc.Close()
+
+	content, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("read file %s: %w", c.objectKey, err)
+	}
 
 	return []domain.RawDocument{
 		{
+			ID:      c.sourceID,
 			Content: string(content),
 			Metadata: map[string]string{
-				"source":        filename,
-				"document_type": docType,
-				"file_path":     c.Path,
+				"source":        c.filename,
+				"document_type": c.docType,
+				"file_path":     c.objectKey,
 			},
 		},
 	}, nil

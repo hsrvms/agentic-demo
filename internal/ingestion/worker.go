@@ -1,7 +1,7 @@
 // Package ingestion implements the Ingestion Workers module.
 //
 // Interface: Ingest(tenantID, sourceID) → IngestionResult.
-// Connectors, chunking, embedding, and dedup are internal seams
+// Connector resolution, chunking, embedding, and dedup are internal seams
 // hidden behind this single entry point.
 package ingestion
 
@@ -17,10 +17,12 @@ import (
 )
 
 // IngestWorker orchestrates the full ingestion pipeline.
+//
+// Connectors are not indexed statically; a ConnectorResolver turns the
+// tenant-scoped DataSource into a Connector at ingest time.
 type IngestWorker struct {
-	connectors     map[string]Connector
+	resolver       ConnectorResolver
 	chunker        knowledge.Chunker
-	embedder       knowledge.Embedder
 	store          knowledge.KnowledgeStore
 	emitter        usage.UsageEmitter
 	dedup          *Dedup
@@ -28,17 +30,15 @@ type IngestWorker struct {
 }
 
 func NewIngestWorker(
-	connectors map[string]Connector,
+	resolver ConnectorResolver,
 	chunker knowledge.Chunker,
-	embedder knowledge.Embedder,
 	store knowledge.KnowledgeStore,
 	emitter usage.UsageEmitter,
 	embeddingModel string,
 ) *IngestWorker {
 	return &IngestWorker{
-		connectors:     connectors,
+		resolver:       resolver,
 		chunker:        chunker,
-		embedder:       embedder,
 		store:          store,
 		emitter:        emitter,
 		dedup:          NewDedup(),
@@ -49,10 +49,11 @@ func NewIngestWorker(
 func (w *IngestWorker) Ingest(ctx context.Context, tenantID domain.TenantID, sourceID string) (domain.IngestionResult, error) {
 	start := time.Now()
 
-	// 1. Find the connector for this source type.
-	connector, ok := w.connectors[sourceID]
-	if !ok {
-		return domain.IngestionResult{}, fmt.Errorf("unknown source: %s", sourceID)
+	// 1. Resolve the connector for this source. Resolution is tenant-scoped and
+	// marks the source error on failure, so a broken source does not retry.
+	connector, err := w.resolver.Resolve(ctx, tenantID, sourceID)
+	if err != nil {
+		return domain.IngestionResult{}, fmt.Errorf("resolve source %s: %w", sourceID, err)
 	}
 
 	// 2. Extract raw documents.

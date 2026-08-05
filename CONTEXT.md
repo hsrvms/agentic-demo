@@ -40,9 +40,11 @@ external system on behalf of a tenant. Contains source type, name, connection
 config, encrypted credentials, and lifecycle status (inactive, active, error).
 
 ### Connector
-The code that performs the actual extraction from an external system.
-A connector is an implementation detail of the ingestion pipeline — it
-reads from a DataSource's configuration and produces RawDocuments.
+A code component that performs the actual extraction from an external system.
+A Connector is built from a DataSource at ingest time by a **ConnectorResolver**
+— the single place that maps a SourceType to extraction behaviour. It reads
+from a DataSource's configuration (and decrypted credentials) and produces
+RawDocuments.
 
 ### SourceType
 The kind of external system a DataSource connects to: file_upload, website,
