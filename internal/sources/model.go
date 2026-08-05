@@ -60,6 +60,7 @@ type CreateDataSourceParams struct {
 	Name        string
 	Config      json.RawMessage
 	Credentials []byte // plaintext; will be encrypted by the service
+	File        []byte // file_upload only: raw bytes persisted to the object store
 }
 
 // UpdateDataSourceParams holds the inputs for updating an existing data source.
@@ -69,6 +70,7 @@ type UpdateDataSourceParams struct {
 	Config      *json.RawMessage
 	Credentials *[]byte // plaintext; will be encrypted by the service
 	Status      *Status
+	File        []byte // file_upload only: replaces the stored object
 }
 
 // DataSourcePage is a paginated list of data sources.

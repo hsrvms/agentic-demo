@@ -18,6 +18,7 @@ import (
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/sources"
+	"github.com/agentic-demo/platform/internal/storage"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/agentic-demo/platform/internal/web"
@@ -90,6 +91,20 @@ func New(cfg config.Config) (*Server, error) {
 	reports.NewHandler(reportService).Register(api, tenantMw)
 
 	encryptionKey := sha256.Sum256([]byte(cfg.EncryptionKey))
+
+	objectStore, err := storage.NewS3ObjectStore(&storage.S3Config{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		cleanupOnError()
+		return nil, fmt.Errorf("create object store: %w", err)
+	}
+
 	cryptService, err := sources.NewAESGCMService(encryptionKey[:])
 	if err != nil {
 		cleanupOnError()
@@ -100,6 +115,7 @@ func New(cfg config.Config) (*Server, error) {
 		cryptService,
 		sources.NewConnectionTester(),
 		jobQueue,
+		objectStore,
 	)
 	sourceCore := sources.NewHandlerCore(sourceService)
 	sources.NewHandler(sourceCore).Register(api, tenantMw)

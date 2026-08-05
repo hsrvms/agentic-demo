@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -386,6 +388,53 @@ func TestSourcesHandler_Create_FullPageRedirect(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Location"), "/sources/"+newID.String())
 }
 
+func TestSourcesHandler_Create_FileUploadPassesBytesAsFile(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+
+	svc := &mockSourceService{
+		createResult: sources.DataSource{
+			ID:         uuid.New(),
+			Name:       "Upload",
+			SourceType: sources.SourceTypeFileUpload,
+			Status:     sources.StatusInactive,
+		},
+	}
+
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	require.NoError(t, mw.WriteField("name", "Upload"))
+	require.NoError(t, mw.WriteField("source_type", "file_upload"))
+	require.NoError(t, mw.WriteField("_csrf", "test-csrf-token"))
+	part, err := mw.CreateFormFile("file", "notes.txt")
+	require.NoError(t, err)
+	_, err = part.Write([]byte("hello world"))
+	require.NoError(t, err)
+	require.NoError(t, mw.Close())
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/sources", &buf)
+	req.Header.Set(echo.HeaderContentType, mw.FormDataContentType())
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	ctx = SetCSRFToken(ctx, "test-csrf-token")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	err = handler.Create(c)
+	require.NoError(t, err)
+
+	require.NotNil(t, svc.createdParams)
+	// Bytes travel as File, not as credentials.
+	assert.Equal(t, []byte("hello world"), svc.createdParams.File)
+	assert.Empty(t, svc.createdParams.Credentials)
+
+	var cfg map[string]string
+	require.NoError(t, json.Unmarshal(svc.createdParams.Config, &cfg))
+	assert.Equal(t, "notes.txt", cfg["filename"])
+}
+
 func TestSourcesHandler_Create_HTMXValidationError(t *testing.T) {
 	tenantID := domain.TenantID("t_test")
 
@@ -648,7 +697,7 @@ func TestBuildConfigAndCreds(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		config, creds, err := buildConfigAndCreds("website", c)
+		config, creds, _, err := buildConfigAndCreds("website", c)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Nil(t, creds)
@@ -666,7 +715,7 @@ func TestBuildConfigAndCreds(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		config, creds, err := buildConfigAndCreds("crm_hubspot", c)
+		config, creds, _, err := buildConfigAndCreds("crm_hubspot", c)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, []byte("test-key-123"), creds)
@@ -678,7 +727,7 @@ func TestBuildConfigAndCreds(t *testing.T) {
 		req.Header.Set(echo.HeaderContentType, echo.MIMEMultipartForm)
 		c := e.NewContext(req, httptest.NewRecorder())
 
-		_, _, err := buildConfigAndCreds("file_upload", c)
+		_, _, _, err := buildConfigAndCreds("file_upload", c)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "file is required")
 	})

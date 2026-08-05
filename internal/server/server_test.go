@@ -16,11 +16,19 @@ import (
 func TestServer_StartsHealthAndRoutes(t *testing.T) {
 	redisServer := miniredis.RunT(t)
 
+	endpoint, accessKey, secretKey, useSSL := testutil.StartMinIO(t)
+
 	cfg := config.Config{
 		DatabaseURL:   testutil.StartPostgres(t),
 		RedisURL:      redisServer.Addr(),
 		JWTSecret:     "test-jwt-secret",
 		EncryptionKey: "test-encryption-key",
+		S3Endpoint:    endpoint,
+		S3AccessKey:   accessKey,
+		S3SecretKey:   secretKey,
+		S3Region:      "us-east-1",
+		S3Bucket:      "platform",
+		S3UseSSL:      useSSL,
 	}
 
 	srv, err := New(cfg)
