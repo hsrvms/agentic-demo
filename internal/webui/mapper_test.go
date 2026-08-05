@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // --- MapSourceItem ---
@@ -271,4 +273,143 @@ func TestPrettyJSON(t *testing.T) {
 	assert.Equal(t, "", PrettyJSON(nil))
 	assert.Equal(t, "", PrettyJSON(json.RawMessage("")))
 	assert.Equal(t, "invalid", PrettyJSON(json.RawMessage("invalid")))
+}
+
+// --- ReportTypeLabel ---
+
+func TestReportTypeLabel(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"daily", "Daily"},
+		{"weekly", "Weekly"},
+		{"monthly", "Monthly"},
+		{"on_demand", "On Demand"},
+		{"custom", "custom"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, ReportTypeLabel(tt.in))
+		})
+	}
+}
+
+// --- ReportTypeIntent ---
+
+func TestReportTypeIntent(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"daily", "info"},
+		{"weekly", "primary"},
+		{"monthly", "primary"},
+		{"on_demand", "warning"},
+		{"custom", "primary"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			assert.Equal(t, tt.want, ReportTypeIntent(tt.in))
+		})
+	}
+}
+
+// --- MapReportItem / MapReportList ---
+
+func TestMapReportItem(t *testing.T) {
+	id := uuid.New()
+	generated := time.Now().Add(-48 * time.Hour)
+	r := &reports.StoredReport{
+		ID:          id,
+		Type:        "weekly",
+		Title:       "Weekly Market Brief",
+		Content:     "# Heading",
+		Focus:       "Revenue growth",
+		GeneratedAt: generated,
+	}
+
+	item := MapReportItem(r)
+	assert.Equal(t, id.String(), item.ID)
+	assert.Equal(t, "weekly", item.Type)
+	assert.Equal(t, "Weekly", item.TypeLabel)
+	assert.Equal(t, "primary", item.TypeIntent)
+	assert.Equal(t, "Weekly Market Brief", item.Title)
+	assert.Equal(t, "Revenue growth", item.Focus)
+	assert.Equal(t, generated.Format("Jan 02, 2006 15:04"), item.GeneratedAt)
+}
+
+func TestMapReportList(t *testing.T) {
+	page := reports.ReportPage{
+		Reports: []reports.StoredReport{
+			{ID: uuid.New(), Title: "A", Type: "daily"},
+			{ID: uuid.New(), Title: "B", Type: "on_demand"},
+		},
+		TotalCount: 42,
+		Page:       2,
+		PageSize:   20,
+	}
+
+	data := MapReportList(page)
+	assert.Len(t, data.Reports, 2)
+	assert.Equal(t, "A", data.Reports[0].Title)
+	assert.Equal(t, "info", data.Reports[0].TypeIntent)
+	assert.Equal(t, "warning", data.Reports[1].TypeIntent)
+	assert.Equal(t, 42, data.TotalCount)
+	assert.Equal(t, 2, data.Page)
+	assert.Equal(t, 20, data.PageSize)
+}
+
+// --- MapReportDetail / RenderMarkdown ---
+
+func TestMapReportDetail_RendersMarkdownAndCitations(t *testing.T) {
+	r := &reports.StoredReport{
+		ID:          uuid.New(),
+		Type:        "monthly",
+		Title:       "Monthly Review",
+		Content:     "# Revenue\n\nRevenue is **up 12%**.",
+		Citations:   json.RawMessage(`[{"title":"Q3 Report","url":"https://example.com/q3","source":"Internal"}]`),
+		GeneratedAt: time.Now(),
+	}
+
+	detail := MapReportDetail(r)
+	assert.Equal(t, "Monthly Review", detail.Title)
+	assert.Equal(t, "monthly", detail.Type)
+	assert.Equal(t, "primary", detail.TypeIntent)
+	assert.Contains(t, detail.ContentHTML, "<h1>Revenue</h1>")
+	assert.Contains(t, detail.ContentHTML, "<strong>up 12%</strong>")
+	require.Len(t, detail.Citations, 1)
+	assert.Equal(t, "Q3 Report", detail.Citations[0].Title)
+	assert.Equal(t, "https://example.com/q3", detail.Citations[0].URL)
+	assert.Equal(t, "Internal", detail.Citations[0].Source)
+}
+
+func TestRenderMarkdown_Unknown(t *testing.T) {
+	got := RenderMarkdown("**bold** and `code`")
+	assert.Contains(t, got, "<strong>bold</strong>")
+	assert.Contains(t, got, "<code>code</code>")
+}
+
+// --- ParseCitations ---
+
+func TestParseCitations_Empty(t *testing.T) {
+	assert.Nil(t, ParseCitations(nil))
+	assert.Nil(t, ParseCitations(json.RawMessage("")))
+	assert.Nil(t, ParseCitations(json.RawMessage("not json")))
+}
+
+func TestParseCitations_GenericShape(t *testing.T) {
+	raw := json.RawMessage(`[{"source":"https://a.com","reference":"A headline"},{"name":"B","link":"https://b.com"}]`)
+	cites := ParseCitations(raw)
+	require.Len(t, cites, 2)
+	assert.Equal(t, "A headline", cites[0].Title)
+	assert.Equal(t, "https://a.com", cites[0].Source)
+	assert.Equal(t, "B", cites[1].Title)
+	assert.Equal(t, "https://b.com", cites[1].URL)
+}
+
+// --- FormatDate ---
+
+func TestFormatDate(t *testing.T) {
+	assert.Equal(t, "", FormatDate(time.Time{}))
+	ts := time.Date(2026, 8, 5, 14, 30, 0, 0, time.UTC)
+	assert.Equal(t, "Aug 05, 2026 14:30", FormatDate(ts))
 }

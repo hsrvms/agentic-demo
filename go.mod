@@ -20,6 +20,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
+	github.com/yuin/goldmark v1.8.5
 	golang.org/x/crypto v0.54.0
 )
 

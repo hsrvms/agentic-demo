@@ -1,0 +1,71 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+
+templ ReportDetail(data webui.ReportDetailData, flashes []webui.Flash) {
+	@layouts.Base(data.Title, flashes) {
+		<div class="space-y-6">
+			<div class="flex items-start justify-between gap-4">
+				<div>
+					<div class="flex items-center gap-3 mb-2">
+						@TypeBadge(data.TypeLabel, data.TypeIntent)
+						if data.GeneratedAt != "" {
+							<span class="text-xs text-content-muted">{ data.GeneratedAt }</span>
+						}
+					</div>
+					<h1 class="text-3xl font-bold tracking-tight">{ data.Title }</h1>
+					if data.Focus != "" {
+						<p class="text-content-secondary mt-2">Focus:{ " " } { data.Focus }</p>
+					}
+				</div>
+				<a
+					href="/reports"
+					class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors shrink-0"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+					</svg>
+					Back to Reports
+				</a>
+			</div>
+
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				// Report content.
+				<article class="lg:col-span-2 bg-surface-card border border-border rounded-lg shadow-sm p-6">
+					<div class="prose report-content max-w-none">
+						@templ.Raw(data.ContentHTML)
+					</div>
+				</article>
+
+				// Citations sidebar.
+				<aside class="bg-surface-card border border-border rounded-lg shadow-sm p-6 h-fit">
+					<h2 class="text-lg font-medium text-content mb-4">Citations</h2>
+					if len(data.Citations) > 0 {
+						<ul class="space-y-4">
+							for i, c := range data.Citations {
+								<li class="flex gap-3">
+									<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-subtle text-xs font-medium text-primary">
+										{ i + 1 }
+									</span>
+									<div class="min-w-0">
+										if c.URL != "" {
+											<a href={ c.URL } target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-content hover:text-primary transition-colors break-words">{ c.Title }</a>
+										} else {
+											<p class="text-sm font-medium text-content break-words">{ c.Title }</p>
+										}
+										if c.Source != "" {
+											<p class="text-xs text-content-muted mt-0.5 break-words">{ c.Source }</p>
+										}
+									</div>
+								</li>
+							}
+						</ul>
+					} else {
+						<p class="text-sm text-content-muted">No citations were recorded for this report.</p>
+					}
+				</aside>
+			</div>
+		</div>
+	}
+}

@@ -3,13 +3,17 @@
 package webui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/usage"
+	"github.com/yuin/goldmark"
 )
 
 // --- Source mappers ---
@@ -54,13 +58,142 @@ func MapSourceDetail(ds *sources.DataSource) SourceDetailData {
 	}
 }
 
+// --- Report mappers ---
+
+// MapReportItem converts a domain StoredReport into a ReportItem view model.
+func MapReportItem(r *reports.StoredReport) ReportItem {
+	return ReportItem{
+		ID:          r.ID.String(),
+		Type:        r.Type,
+		TypeLabel:   ReportTypeLabel(r.Type),
+		TypeIntent:  ReportTypeIntent(r.Type),
+		Title:       r.Title,
+		Focus:       r.Focus,
+		GeneratedAt: FormatDate(r.GeneratedAt),
+	}
+}
+
+// MapReportList converts a paginated ReportPage into a ReportListData view model.
+func MapReportList(result reports.ReportPage) ReportListData {
+	items := make([]ReportItem, len(result.Reports))
+	for i := range result.Reports {
+		items[i] = MapReportItem(&result.Reports[i])
+	}
+	return ReportListData{
+		Reports:    items,
+		TotalCount: result.TotalCount,
+		Page:       result.Page,
+		PageSize:   result.PageSize,
+	}
+}
+
+// MapReportDetail converts a domain StoredReport into a ReportDetailData view
+// model, rendering the markdown content to HTML and parsing its citations.
+func MapReportDetail(r *reports.StoredReport) ReportDetailData {
+	return ReportDetailData{
+		ID:          r.ID.String(),
+		Title:       r.Title,
+		Type:        r.Type,
+		TypeLabel:   ReportTypeLabel(r.Type),
+		TypeIntent:  ReportTypeIntent(r.Type),
+		Focus:       r.Focus,
+		GeneratedAt: FormatDate(r.GeneratedAt),
+		ContentHTML: RenderMarkdown(r.Content),
+		Citations:   ParseCitations(r.Citations),
+	}
+}
+
+// ReportTypeLabel returns a human-readable label for a report type.
+func ReportTypeLabel(t string) string {
+	switch t {
+	case "daily":
+		return "Daily"
+	case "weekly":
+		return "Weekly"
+	case "monthly":
+		return "Monthly"
+	case "on_demand":
+		return "On Demand"
+	default:
+		return t
+	}
+}
+
+// ReportTypeIntent maps a report type to a design-system intent.
+// daily=info, weekly=primary, monthly=primary, on_demand=warning.
+func ReportTypeIntent(t string) string {
+	switch t {
+	case "daily":
+		return "info"
+	case "weekly", "monthly":
+		return "primary"
+	case "on_demand":
+		return "warning"
+	default:
+		return "primary"
+	}
+}
+
+// ParseCitations parses a report's citations JSON into a slice of Citation.
+// It tolerates malformed or empty JSON, returning an empty slice in that case.
+func ParseCitations(raw json.RawMessage) []Citation {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	// Citations are an array of objects. Unmarshal generically so unsupported
+	// key shapes lose no data, then map the common fields.
+	var generic []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil
+	}
+	out := make([]Citation, 0, len(generic))
+	for _, g := range generic {
+		out = append(out, Citation{
+			Title:  firstString(g, "title", "name", "reference"),
+			URL:    firstString(g, "url", "link"),
+			Source: firstString(g, "source", "snippet"),
+		})
+	}
+	return out
+}
+
+// RenderMarkdown renders markdown to safe HTML. On parse errors it falls back
+// to the escaped raw text so content is never lost.
+func RenderMarkdown(md string) string {
+	var buf bytes.Buffer
+	if err := goldmark.Convert([]byte(md), &buf); err != nil {
+		return html.EscapeString(md)
+	}
+	return buf.String()
+}
+
+// FormatDate renders a timestamp as a human-readable date and time.
+func FormatDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("Jan 02, 2006 15:04")
+}
+
+// firstString returns the first non-empty string value for the given keys.
+func firstString(m map[string]json.RawMessage, keys ...string) string {
+	for _, k := range keys {
+		var s string
+		if raw, ok := m[k]; ok && json.Unmarshal(raw, &s) == nil && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 // --- Dashboard mapper ---
 
 // MapDashboard assembles a DashboardData view model from the four domain inputs.
 // All inputs are optional (nil) — missing data gets zero-value defaults.
 func MapDashboard(
 	currentUsage *usage.CurrentUsage,
-	reports int,
+	reportsCount int,
 	activeSources int,
 	budgetStatus *budget.BudgetStatus,
 ) DashboardData {
@@ -68,7 +201,7 @@ func MapDashboard(
 		CostFormatted:   "$0.00",
 		TokensFormatted: "0",
 		BudgetIntent:    "success",
-		ReportsCount:    reports,
+		ReportsCount:    reportsCount,
 		ActiveSources:   activeSources,
 	}
 
@@ -168,7 +301,7 @@ func FormatTimeAgo(t time.Time) string {
 	}
 }
 
-// PrettyJSON formats JSON for display.
+
 func PrettyJSON(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""

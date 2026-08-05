@@ -140,6 +140,7 @@ func New(cfg config.Config) (*Server, error) {
 	web.NewServer(authService, tenantService,
 		web.WithDashboard(usageService, reportService, sourceService, budgetService),
 		web.WithSources(sourceCore),
+		web.WithReports(reportService),
 	).Register(e.Group(""))
 	e.GET("/static/*", web.StaticHandler())
 	e.HTTPErrorHandler = web.MakeErrorHandler(e.HTTPErrorHandler)
