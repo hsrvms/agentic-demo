@@ -22,6 +22,7 @@ type Server struct {
 	sourcesHandler   *SourcesHandler
 	reportsHandler   *ReportsHandler
 	schedulesHandler *SchedulesHandler
+	usageHandler     *UsageHandler
 	authService      auth.AuthService
 	tenantService    tenant.TenantService
 	secureCookies    bool
@@ -67,6 +68,13 @@ func WithReports(reportService reports.ReportService, jobQueue queue.JobQueue) S
 func WithSchedules(scheduleService scheduling.ScheduleService) ServerOption {
 	return func(s *Server) {
 		s.schedulesHandler = NewSchedulesHandler(scheduleService)
+	}
+}
+
+// WithUsage wires the usage page handler.
+func WithUsage(usageService usage.UsageService) ServerOption {
+	return func(s *Server) {
+		s.usageHandler = NewUsageHandler(usageService)
 	}
 }
 
@@ -129,6 +137,11 @@ func (s *Server) Register(e *echo.Group) {
 	// Report schedule management routes.
 	if s.schedulesHandler != nil {
 		s.schedulesHandler.Register(authGroup)
+	}
+
+	// Usage page routes.
+	if s.usageHandler != nil {
+		s.usageHandler.Register(authGroup)
 	}
 }
 

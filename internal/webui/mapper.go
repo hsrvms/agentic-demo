@@ -224,7 +224,199 @@ func MapDashboard(
 	return data
 }
 
-// --- Report type options ---
+// --- Usage mappers ---
+
+// MapUsage assembles a UsageData view model from the Redis-backed current
+// usage snapshot and the first page of usage events. The event page is
+// optional (nil) — missing data yields an empty event log.
+func MapUsage(current *usage.CurrentUsage, events *usage.UsageEventPage) UsageData {
+	data := UsageData{
+		Stats: []UsageStatData{
+			{Label: "Total Cost MTD", Value: "$0.00", Intent: "primary"},
+			{Label: "Input Tokens", Value: "0", Intent: "info"},
+			{Label: "Output Tokens", Value: "0", Intent: "info"},
+			{Label: "Tool Calls", Value: "0", Intent: "warning"},
+			{Label: "Embedding Tokens", Value: "0", Intent: "success"},
+			{Label: "Reports Generated", Value: "0", Intent: "primary"},
+		},
+		Models: make([]UsageModelItem, 0),
+		Events: make([]UsageEventItem, 0),
+	}
+
+	if current != nil {
+		data.HasData = true
+		data.PeriodLabel = formatPeriodLabel(current.PeriodStart)
+		data.Stats = []UsageStatData{
+			{Label: "Total Cost MTD", Value: fmt.Sprintf("$%.2f", current.TotalCostUSD), Intent: "primary"},
+			{Label: "Input Tokens", Value: FormatTokens(current.TotalInputTokens), Intent: "info"},
+			{Label: "Output Tokens", Value: FormatTokens(current.TotalOutputTokens), Intent: "info"},
+			{Label: "Tool Calls", Value: strconv.FormatInt(current.TotalToolCalls, 10), Intent: "warning"},
+			{Label: "Embedding Tokens", Value: FormatTokens(current.TotalEmbeddingTokens), Intent: "success"},
+			{Label: "Reports Generated", Value: strconv.FormatInt(current.ReportsGenerated, 10), Intent: "primary"},
+		}
+		for i := range current.ByModel {
+			data.Models = append(data.Models, MapUsageModel(&current.ByModel[i]))
+		}
+	}
+
+	if events != nil {
+		data.Events = MapUsageEvents(events.Events)
+		data.HasMoreEvents = events.Page*events.PageSize < events.TotalCount
+		data.NextEventPage = events.Page + 1
+	}
+
+	return data
+}
+
+// MapUsageModel converts a usage.ModelUsage into a UsageModelItem view model.
+func MapUsageModel(m *usage.ModelUsage) UsageModelItem {
+	return UsageModelItem{
+		Model:           m.Model,
+		InputTokens:     FormatTokens(m.InputTokens),
+		OutputTokens:    FormatTokens(m.OutputTokens),
+		ToolCalls:       strconv.FormatInt(m.ToolCalls, 10),
+		EmbeddingTokens: FormatTokens(m.EmbeddingTokens),
+		CostUSD:         fmt.Sprintf("$%.2f", m.CostUSD),
+	}
+}
+
+// MapUsageSummary maps a domain UsageSummary into a UsageSummaryData fragment
+// view model.
+func MapUsageSummary(summary *usage.UsageSummary) UsageSummaryData {
+	data := UsageSummaryData{
+		Models: make([]UsageModelItem, 0),
+	}
+	if summary == nil {
+		return data
+	}
+
+	data.HasData = len(summary.Models) > 0
+	data.FromLabel = formatDateOnly(summary.From)
+	data.ToLabel = formatDateOnly(summary.To)
+	data.CostFormatted = fmt.Sprintf("$%.2f", summary.TotalCostUSD)
+	for i := range summary.Models {
+		m := &summary.Models[i]
+		data.Models = append(data.Models, UsageModelItem{
+			Model:           m.Model,
+			InputTokens:     FormatTokens(m.InputTokens),
+			OutputTokens:    FormatTokens(m.OutputTokens),
+			ToolCalls:       strconv.FormatInt(int64(m.ToolCalls), 10),
+			EmbeddingTokens: FormatTokens(m.EmbeddingTokens),
+			CostUSD:         fmt.Sprintf("$%.2f", m.CostUSD),
+		})
+	}
+	return data
+}
+
+// MapUsageEvents converts domain usage event records into event log view
+// models, deriving a human-readable summary from each event's payload.
+func MapUsageEvents(records []usage.UsageEventRecord) []UsageEventItem {
+	items := make([]UsageEventItem, len(records))
+	for i := range records {
+		r := &records[i]
+		label, intent := eventTypeMeta(r.EventType)
+		items[i] = UsageEventItem{
+			ID:         r.ID.String(),
+			EventType:  r.EventType,
+			TypeLabel:  label,
+			TypeIntent: intent,
+			Summary:    eventSummary(r),
+			CreatedAt:  FormatDate(r.CreatedAt),
+		}
+	}
+	return items
+}
+
+// formatPeriodLabel renders a month label like "August 2026".
+func formatPeriodLabel(from time.Time) string {
+	if from.IsZero() {
+		return ""
+	}
+	year, month, _ := from.Date()
+	return fmt.Sprintf("%s %d", month, year)
+}
+
+// formatDateOnly renders a date as "Jan 02, 2006", or an empty string when
+// the time is zero (unbounded range edge).
+func formatDateOnly(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("Jan 02, 2006")
+}
+
+// eventTypeMeta maps a usage event type to a label and design-system intent.
+func eventTypeMeta(eventType string) (label, intent string) {
+	switch eventType {
+	case string(usage.EventLLM):
+		return "LLM", "info"
+	case string(usage.EventTool):
+		return "Tool", "warning"
+	case string(usage.EventEmbedding):
+		return "Embedding", "success"
+	default:
+		return eventType, "info"
+	}
+}
+
+// eventSummary renders a one-line human-readable description of a usage
+// event from its type-specific payload. Malformed payloads fall back to the
+// bare event type.
+func eventSummary(r *usage.UsageEventRecord) string {
+	type llmPayload struct {
+		Model        string `json:"Model"`
+		InputTokens  int    `json:"InputTokens"`
+		OutputTokens int    `json:"OutputTokens"`
+	}
+	type toolPayload struct {
+		ToolName string `json:"ToolName"`
+		Model    string `json:"Model"`
+		Success  bool   `json:"Success"`
+	}
+	type embeddingPayload struct {
+		Model           string `json:"Model"`
+		ChunksProcessed int    `json:"ChunksProcessed"`
+	}
+	type payload struct {
+		Type      string            `json:"Type"`
+		LLM       *llmPayload       `json:"LLM"`
+		Tool      *toolPayload      `json:"Tool"`
+		Embedding *embeddingPayload `json:"Embedding"`
+	}
+
+	var p payload
+	if err := json.Unmarshal(r.Payload, &p); err != nil {
+		return eventTypeLabel(r.EventType)
+	}
+
+	switch p.Type {
+	case string(usage.EventLLM):
+		if p.LLM != nil {
+			tokens := p.LLM.InputTokens + p.LLM.OutputTokens
+			return fmt.Sprintf("%s · %d tokens", p.LLM.Model, tokens)
+		}
+	case string(usage.EventTool):
+		if p.Tool != nil {
+			status := "succeeded"
+			if !p.Tool.Success {
+				status = "failed"
+			}
+			return fmt.Sprintf("%s · %s", p.Tool.ToolName, status)
+		}
+	case string(usage.EventEmbedding):
+		if p.Embedding != nil {
+			return fmt.Sprintf("%s · %d chunks", p.Embedding.Model, p.Embedding.ChunksProcessed)
+		}
+	}
+	return eventTypeLabel(p.Type)
+}
+
+// eventTypeLabel returns a plain label for an event type, falling back to the
+// raw type string.
+func eventTypeLabel(eventType string) string {
+	label, _ := eventTypeMeta(eventType)
+	return label
+}
 
 // --- Schedule mappers ---
 

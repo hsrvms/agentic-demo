@@ -97,10 +97,10 @@ func TestMapSourceList_Empty(t *testing.T) {
 
 func TestMapSourceDetail(t *testing.T) {
 	ds := &sources.DataSource{
-		ID:      uuid.New(),
-		Name:    "Detail Source",
-		Config:  json.RawMessage(`{"url":"https://example.com"}`),
-		Status:  sources.StatusActive,
+		ID:          uuid.New(),
+		Name:        "Detail Source",
+		Config:      json.RawMessage(`{"url":"https://example.com"}`),
+		Status:      sources.StatusActive,
 		Credentials: []byte("secret"),
 	}
 
@@ -412,4 +412,144 @@ func TestFormatDate(t *testing.T) {
 	assert.Equal(t, "", FormatDate(time.Time{}))
 	ts := time.Date(2026, 8, 5, 14, 30, 0, 0, time.UTC)
 	assert.Equal(t, "Aug 05, 2026 14:30", FormatDate(ts))
+}
+
+// --- Usage mappers ---
+
+func TestMapUsage_WithCurrentAndEvents(t *testing.T) {
+	now := time.Now().UTC()
+	current := &usage.CurrentUsage{
+		TenantID:             "t1",
+		PeriodStart:          time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:            time.Date(2026, 8, 31, 23, 59, 59, 0, time.UTC),
+		TotalCostUSD:         12.5,
+		TotalInputTokens:     1_000_000,
+		TotalOutputTokens:    500_000,
+		TotalToolCalls:       42,
+		TotalEmbeddingTokens: 2_000_000,
+		ReportsGenerated:     3,
+		ByModel: []usage.ModelUsage{
+			{Model: "qwen-turbo", InputTokens: 1_000_000, OutputTokens: 500_000, ToolCalls: 42, EmbeddingTokens: 2_000_000, CostUSD: 12.5},
+		},
+	}
+	events := &usage.UsageEventPage{
+		Events: []usage.UsageEventRecord{
+			{
+				ID:        uuid.New(),
+				TenantID:  "t1",
+				EventType: string(usage.EventLLM),
+				Payload:   json.RawMessage(`{"Type":"llm_usage","LLM":{"Model":"qwen-turbo","InputTokens":100,"OutputTokens":50}}`),
+				CreatedAt: now,
+			},
+			{
+				ID:        uuid.New(),
+				TenantID:  "t1",
+				EventType: string(usage.EventTool),
+				Payload:   json.RawMessage(`{"Type":"tool_usage","Tool":{"ToolName":"web_search","Success":true}}`),
+				CreatedAt: now,
+			},
+		},
+		TotalCount: 22,
+		Page:       1,
+		PageSize:   20,
+	}
+
+	data := MapUsage(current, events)
+
+	assert.True(t, data.HasData)
+	assert.Equal(t, "August 2026", data.PeriodLabel)
+	assert.Equal(t, "$12.50", data.Stats[0].Value)
+	assert.Equal(t, "Total Cost MTD", data.Stats[0].Label)
+	assert.Equal(t, "primary", data.Stats[0].Intent)
+	assert.Equal(t, "1.0M", data.Stats[1].Value) // input tokens
+	assert.Equal(t, "500.0K", data.Stats[2].Value)
+	assert.Equal(t, "42", data.Stats[3].Value) // tool calls
+	assert.Equal(t, "2.0M", data.Stats[4].Value)
+	assert.Equal(t, "3", data.Stats[5].Value) // reports generated
+
+	require.Len(t, data.Models, 1)
+	assert.Equal(t, "qwen-turbo", data.Models[0].Model)
+	assert.Equal(t, "$12.50", data.Models[0].CostUSD)
+
+	require.Len(t, data.Events, 2)
+	assert.Equal(t, "LLM", data.Events[0].TypeLabel)
+	assert.Equal(t, "qwen-turbo · 150 tokens", data.Events[0].Summary)
+	assert.Equal(t, "Tool", data.Events[1].TypeLabel)
+	assert.Equal(t, "web_search · succeeded", data.Events[1].Summary)
+
+	assert.True(t, data.HasMoreEvents)
+	assert.Equal(t, 2, data.NextEventPage)
+}
+
+func TestMapUsage_NilCurrent(t *testing.T) {
+	data := MapUsage(nil, nil)
+	assert.False(t, data.HasData)
+	assert.Len(t, data.Stats, 6) // zero-value default cards
+	assert.Empty(t, data.Models)
+	assert.Empty(t, data.Events)
+	assert.False(t, data.HasMoreEvents)
+}
+
+func TestMapUsage_NoPaginationWhenSinglePage(t *testing.T) {
+	events := &usage.UsageEventPage{
+		Events:     []usage.UsageEventRecord{{ID: uuid.New(), TenantID: "t1", EventType: string(usage.EventLLM), CreatedAt: time.Now().UTC()}},
+		TotalCount: 1,
+		Page:       1,
+		PageSize:   20,
+	}
+	data := MapUsage(nil, events)
+	assert.False(t, data.HasMoreEvents)
+}
+
+func TestMapUsageSummary(t *testing.T) {
+	summary := &usage.UsageSummary{
+		TenantID:     "t1",
+		From:         time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+		To:           time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC),
+		TotalCostUSD: 8.0,
+		Models: []usage.ModelUsageSummary{
+			{Model: "qwen-max", InputTokens: 2000, OutputTokens: 1000, ToolCalls: 5, EmbeddingTokens: 0, CostUSD: 8.0},
+		},
+	}
+	data := MapUsageSummary(summary)
+	assert.True(t, data.HasData)
+	assert.Equal(t, "Jul 01, 2026", data.FromLabel)
+	assert.Equal(t, "Jul 31, 2026", data.ToLabel)
+	assert.Equal(t, "$8.00", data.CostFormatted)
+	require.Len(t, data.Models, 1)
+	assert.Equal(t, "qwen-max", data.Models[0].Model)
+	assert.Equal(t, "2.0K", data.Models[0].InputTokens)
+	assert.Equal(t, "5", data.Models[0].ToolCalls)
+}
+
+func TestMapUsageSummary_Empty(t *testing.T) {
+	data := MapUsageSummary(&usage.UsageSummary{Models: []usage.ModelUsageSummary{}})
+	assert.False(t, data.HasData)
+	assert.Empty(t, data.Models)
+}
+
+func TestMapUsageEvents_EmbeddingAndMalformed(t *testing.T) {
+	records := []usage.UsageEventRecord{
+		{
+			ID:        uuid.New(),
+			TenantID:  "t1",
+			EventType: string(usage.EventEmbedding),
+			Payload:   json.RawMessage(`{"Type":"embedding_usage","Embedding":{"Model":"bge","ChunksProcessed":7}}`),
+			CreatedAt: time.Now().UTC(),
+		},
+		{
+			ID:        uuid.New(),
+			TenantID:  "t1",
+			EventType: "unknown_type",
+			Payload:   json.RawMessage(`not json`),
+			CreatedAt: time.Now().UTC(),
+		},
+	}
+	items := MapUsageEvents(records)
+	require.Len(t, items, 2)
+	assert.Equal(t, "Embedding", items[0].TypeLabel)
+	assert.Equal(t, "success", items[0].TypeIntent)
+	assert.Equal(t, "bge · 7 chunks", items[0].Summary)
+	assert.Equal(t, "unknown_type", items[1].TypeLabel)
+	assert.Equal(t, "unknown_type", items[1].Summary)
 }

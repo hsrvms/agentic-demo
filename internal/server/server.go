@@ -142,6 +142,7 @@ func New(cfg config.Config) (*Server, error) {
 		web.WithSources(sourceCore),
 		web.WithReports(reportService, jobQueue),
 		web.WithSchedules(scheduleService),
+		web.WithUsage(usageService),
 	).Register(e.Group(""))
 	e.GET("/static/*", web.StaticHandler())
 	e.HTTPErrorHandler = web.MakeErrorHandler(e.HTTPErrorHandler)

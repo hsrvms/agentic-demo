@@ -9,7 +9,6 @@ import "errors"
 // "HH:MM" time of day.
 var ErrInvalidTime = errors.New("invalid time of day")
 
-
 // Flash represents a flash message shown once to the user.
 type Flash struct {
 	Intent  string // "success", "error", "warning", "info"
@@ -181,4 +180,52 @@ type ScheduleFormData struct {
 type WeekdayOption struct {
 	Value string
 	Label string
+}
+
+// UsageStatData is a single stat card on the usage page.
+type UsageStatData struct {
+	Label  string
+	Value  string
+	Intent string // "primary", "info", "warning", "success"
+}
+
+// UsageModelItem is a single per-model row in the usage breakdown table.
+type UsageModelItem struct {
+	Model           string
+	InputTokens     string
+	OutputTokens    string
+	ToolCalls       string
+	EmbeddingTokens string
+	CostUSD         string
+}
+
+// UsageEventItem is a single row in the usage event log.
+type UsageEventItem struct {
+	ID         string
+	EventType  string
+	TypeLabel  string
+	TypeIntent string // "info", "warning", "success"
+	Summary    string
+	CreatedAt  string
+}
+
+// UsageData is the view model for the usage page.
+type UsageData struct {
+	TenantName    string
+	PeriodLabel   string
+	HasData       bool
+	Stats         []UsageStatData
+	Models        []UsageModelItem
+	Events        []UsageEventItem
+	HasMoreEvents bool
+	NextEventPage int
+}
+
+// UsageSummaryData is the view model for the usage summary fragment.
+type UsageSummaryData struct {
+	HasData       bool
+	FromLabel     string
+	ToLabel       string
+	CostFormatted string
+	Models        []UsageModelItem
 }
