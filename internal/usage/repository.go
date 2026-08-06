@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/agentic-demo/platform/internal/db"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -167,9 +166,4 @@ func toPgTimestamptz(t time.Time) time.Time {
 		return time.Time{}
 	}
 	return t
-}
-
-// pgUUIDBytes converts a uuid.UUID to [16]byte for pgtype.UUID.
-func pgUUIDBytes(id uuid.UUID) [16]byte {
-	return [16]byte(id)
 }

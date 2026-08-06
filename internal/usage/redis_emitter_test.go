@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupRedis(t *testing.T) (*RedisEmitter, *redis.Client, *miniredis.Miniredis) {
+func setupRedis(t *testing.T) (*RedisEmitter, *redis.Client) {
 	t.Helper()
 	mr := miniredis.NewMiniRedis()
 	require.NoError(t, mr.Start())
@@ -31,11 +31,11 @@ func setupRedis(t *testing.T) (*RedisEmitter, *redis.Client, *miniredis.Miniredi
 		mr.Close()
 	})
 
-	return emitter, client, mr
+	return emitter, client
 }
 
 func TestRedisEmitter_EmitLLMUsage(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -83,7 +83,7 @@ func TestRedisEmitter_EmitLLMUsage(t *testing.T) {
 }
 
 func TestRedisEmitter_EmitToolUsage(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -104,7 +104,7 @@ func TestRedisEmitter_EmitToolUsage(t *testing.T) {
 }
 
 func TestRedisEmitter_EmitToolUsage_NoModel(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -124,7 +124,7 @@ func TestRedisEmitter_EmitToolUsage_NoModel(t *testing.T) {
 }
 
 func TestRedisEmitter_EmitEmbeddingUsage(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -144,7 +144,7 @@ func TestRedisEmitter_EmitEmbeddingUsage(t *testing.T) {
 }
 
 func TestRedisEmitter_EmitEmbeddingUsage_NoModel(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -163,7 +163,7 @@ func TestRedisEmitter_EmitEmbeddingUsage_NoModel(t *testing.T) {
 }
 
 func TestRedisEmitter_FlushQueueTrim(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	// Push many events to trigger trim.
@@ -181,7 +181,7 @@ func TestRedisEmitter_FlushQueueTrim(t *testing.T) {
 }
 
 func TestRedisEmitter_LLMUsageCountersAggregate(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	// Emit twice for the same tenant+date+model.
@@ -203,7 +203,7 @@ func TestRedisEmitter_LLMUsageCountersAggregate(t *testing.T) {
 }
 
 func TestRedisEmitter_UnknownModel(t *testing.T) {
-	emitter, client, _ := setupRedis(t)
+	emitter, client := setupRedis(t)
 	ctx := context.Background()
 
 	err := emitter.EmitUsage(ctx, UsageEvent{
@@ -230,32 +230,32 @@ func TestEventModel(t *testing.T) {
 		want  string
 	}{
 		{
-			name: "LLM with model",
+			name:  "LLM with model",
 			event: UsageEvent{Type: EventLLM, LLM: &LLMUsage{Model: "qwen-max"}},
 			want:  "qwen-max",
 		},
 		{
-			name: "LLM without model",
+			name:  "LLM without model",
 			event: UsageEvent{Type: EventLLM, LLM: &LLMUsage{}},
 			want:  "_unknown_",
 		},
 		{
-			name: "Tool with model",
+			name:  "Tool with model",
 			event: UsageEvent{Type: EventTool, Tool: &ToolUsage{Model: "qwen-max"}},
 			want:  "qwen-max",
 		},
 		{
-			name: "Tool without model",
+			name:  "Tool without model",
 			event: UsageEvent{Type: EventTool, Tool: &ToolUsage{}},
 			want:  "_tool_",
 		},
 		{
-			name: "Embedding with model",
+			name:  "Embedding with model",
 			event: UsageEvent{Type: EventEmbedding, Embedding: &EmbeddingUsage{Model: "text-embedding-v4"}},
 			want:  "text-embedding-v4",
 		},
 		{
-			name: "Embedding without model",
+			name:  "Embedding without model",
 			event: UsageEvent{Type: EventEmbedding, Embedding: &EmbeddingUsage{}},
 			want:  "_embedding_",
 		},
@@ -275,11 +275,11 @@ func TestComputeCost(t *testing.T) {
 		outputTokens int
 		want         float64
 	}{
-		{"qwen-max", 1000, 500, 0.005},          // (1000/1000)*0.002 + (500/1000)*0.006 = 0.002 + 0.003
-		{"qwen-plus", 1000, 0, 0.001},            // (1000/1000)*0.001 = 0.001
-		{"qwen-turbo", 0, 1000, 0.0015},          // (1000/1000)*0.0015 = 0.0015
-		{"text-embedding-v4", 1000, 0, 0.0001},   // (1000/1000)*0.0001 = 0.0001
-		{"unknown-model", 1000, 500, 0},           // not in pricing table
+		{"qwen-max", 1000, 500, 0.005},         // expected: 0.002 + 0.003
+		{"qwen-plus", 1000, 0, 0.001},          // expected: 0.001
+		{"qwen-turbo", 0, 1000, 0.0015},        // expected: 0.0015
+		{"text-embedding-v4", 1000, 0, 0.0001}, // expected: 0.0001
+		{"unknown-model", 1000, 500, 0},        // not in pricing table
 	}
 
 	for _, tt := range tests {

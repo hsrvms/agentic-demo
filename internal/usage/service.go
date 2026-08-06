@@ -10,7 +10,7 @@ import (
 
 // UsageService manages usage data queries. Handlers use this interface.
 type UsageService interface {
-	GetSummary(ctx context.Context, tenantID string, from, to string) (*UsageSummary, error)
+	GetSummary(ctx context.Context, tenantID, from, to string) (*UsageSummary, error)
 	GetCurrentUsage(ctx context.Context, tenantID string) (*CurrentUsage, error)
 	ListEvents(ctx context.Context, tenantID string, page, pageSize int) (*UsageEventPage, error)
 }
@@ -25,7 +25,7 @@ func NewService(repo Repository, reader UsageReader) UsageService {
 	return &usageService{repo: repo, reader: reader}
 }
 
-func (s *usageService) GetSummary(ctx context.Context, tenantID string, from, to string) (*UsageSummary, error) {
+func (s *usageService) GetSummary(ctx context.Context, tenantID, from, to string) (*UsageSummary, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
 		return nil, ErrInvalidTenantID
@@ -117,10 +117,7 @@ func (s *usageService) ListEvents(ctx context.Context, tenantID string, page, pa
 
 // parseDateRange parses optional date strings into time.Time values.
 // Empty strings are treated as unbounded (zero time).
-func parseDateRange(from, to string) (time.Time, time.Time, error) {
-	var fromDate, toDate time.Time
-	var err error
-
+func parseDateRange(from, to string) (fromDate, toDate time.Time, err error) {
 	if from != "" {
 		fromDate, err = time.Parse("2006-01-02", from)
 		if err != nil {

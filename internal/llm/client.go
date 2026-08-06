@@ -46,7 +46,7 @@ type client struct {
 }
 
 // NewClient creates an LLM client with a primary provider and optional fallback.
-func NewClient(primary Provider, fallback Provider) LLMClient {
+func NewClient(primary, fallback Provider) LLMClient {
 	return &client{
 		primary:    primary,
 		fallback:   fallback,
@@ -55,7 +55,7 @@ func NewClient(primary Provider, fallback Provider) LLMClient {
 }
 
 // NewClientWithBudget creates an LLM client with budget enforcement.
-func NewClientWithBudget(primary Provider, fallback Provider, budgetChecker budget.BudgetChecker) LLMClient {
+func NewClientWithBudget(primary, fallback Provider, budgetChecker budget.BudgetChecker) LLMClient {
 	return &client{
 		primary:       primary,
 		fallback:      fallback,
