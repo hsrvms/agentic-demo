@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/reports"
+	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/yuin/goldmark"
@@ -222,6 +225,212 @@ func MapDashboard(
 }
 
 // --- Report type options ---
+
+// --- Schedule mappers ---
+
+// MapScheduleItem converts a domain ReportSchedule into a ScheduleItem view
+// model, computing a human-readable cron description for display.
+func MapScheduleItem(s *scheduling.ReportSchedule) ScheduleItem {
+	return ScheduleItem{
+		ID:          s.ID.String(),
+		Type:        string(s.Type),
+		TypeLabel:   ScheduleTypeLabel(s.Type),
+		TypeIntent:  ScheduleTypeIntent(s.Type),
+		CronExpr:    s.CronExpr,
+		CronHuman:   DescribeCron(s.CronExpr),
+		Focus:       s.Focus,
+		Format:      s.Format,
+		FormatLabel: ScheduleFormatLabel(s.Format),
+		Enabled:     s.Enabled,
+	}
+}
+
+// MapScheduleList converts a slice of domain schedules into a
+// ScheduleListData view model.
+func MapScheduleList(schedules []scheduling.ReportSchedule) ScheduleListData {
+	items := make([]ScheduleItem, len(schedules))
+	for i := range schedules {
+		items[i] = MapScheduleItem(&schedules[i])
+	}
+	return ScheduleListData{Schedules: items}
+}
+
+// ScheduleTypeLabel returns a human-readable label for a schedule type.
+func ScheduleTypeLabel(t scheduling.ScheduleType) string {
+	switch t {
+	case scheduling.ScheduleDaily:
+		return "Daily"
+	case scheduling.ScheduleWeekly:
+		return "Weekly"
+	case scheduling.ScheduleMonthly:
+		return "Monthly"
+	default:
+		return string(t)
+	}
+}
+
+// ScheduleTypeIntent maps a schedule type to a design-system intent.
+// daily=info, weekly=primary, monthly=primary.
+func ScheduleTypeIntent(t scheduling.ScheduleType) string {
+	switch t {
+	case scheduling.ScheduleDaily:
+		return "info"
+	case scheduling.ScheduleWeekly, scheduling.ScheduleMonthly:
+		return "primary"
+	default:
+		return "primary"
+	}
+}
+
+// ScheduleTypeOptions returns the available schedule types for the form.
+func ScheduleTypeOptions() []ScheduleTypeOption {
+	return []ScheduleTypeOption{
+		{Value: string(scheduling.ScheduleDaily), Label: "Daily"},
+		{Value: string(scheduling.ScheduleWeekly), Label: "Weekly"},
+		{Value: string(scheduling.ScheduleMonthly), Label: "Monthly"},
+	}
+}
+
+// ScheduleFormatLabel returns a human-readable label for a report format.
+func ScheduleFormatLabel(f string) string {
+	switch f {
+	case "standard":
+		return "Standard"
+	case "concise":
+		return "Concise"
+	case "detailed":
+		return "Detailed"
+	default:
+		if f == "" {
+			return "Standard"
+		}
+		return f
+	}
+}
+
+// ReportFormatOptions returns the available report formats for the form.
+func ReportFormatOptions() []ReportFormatOption {
+	return []ReportFormatOption{
+		{Value: "standard", Label: "Standard"},
+		{Value: "concise", Label: "Concise"},
+		{Value: "detailed", Label: "Detailed"},
+	}
+}
+
+// DescribeCron renders a 5-field cron expression as a human-readable phrase.
+// Unparseable expressions fall back to the raw expression.
+func DescribeCron(expr string) string {
+	parts := strings.Fields(expr)
+	if len(parts) != 5 {
+		return expr
+	}
+	minute, hour, dom, month, dow := parts[0], parts[1], parts[2], parts[3], parts[4]
+
+	if isEvery(parts...) {
+		return "Every minute"
+	}
+
+	when := cronTime(hour, minute)
+
+	// Daily: every day at HH:MM (e.g. "0 9 * * *").
+	if isStar(dom) && isStar(month) && isStar(dow) {
+		return "Every day" + when
+	}
+
+	// Weekly: on a specific weekday (e.g. "0 9 * * 1").
+	if isStar(dom) && isStar(month) && !isStar(dow) {
+		if day, ok := weekdayName(dow); ok {
+			return "Every " + day + when
+		}
+	}
+
+	// Monthly: on a specific day of month (e.g. "0 9 1 * *").
+	if !isStar(dom) && isStar(month) && isStar(dow) {
+		return "Monthly" + ordinal(dom) + when
+	}
+
+	return "Custom schedule" + when
+}
+
+// cronTime renders " at HH:MM" when both hour and minute are fixed.
+func cronTime(hour, minute string) string {
+	if isStar(hour) || isStar(minute) {
+		return ""
+	}
+	return " at " + pad2(hour) + ":" + pad2(minute)
+}
+
+// weekdayName maps a cron weekday (0-7, both 0 and 7 are Sunday) to its name.
+func weekdayName(dow string) (string, bool) {
+	if strings.ContainsAny(dow, "*/,") {
+		return "", false
+	}
+	switch dow {
+	case "0", "7":
+		return "Sunday", true
+	case "1":
+		return "Monday", true
+	case "2":
+		return "Tuesday", true
+	case "3":
+		return "Wednesday", true
+	case "4":
+		return "Thursday", true
+	case "5":
+		return "Friday", true
+	case "6":
+		return "Saturday", true
+	default:
+		return "", false
+	}
+}
+
+// ordinal returns a number with its English ordinal suffix and a leading
+// "on the " phrase (e.g. "1" -> "on the 1st").
+func ordinal(day string) string {
+	n, err := strconv.Atoi(day)
+	if err != nil {
+		return ""
+	}
+	suffix := "th"
+	switch n % 100 {
+	case 11, 12, 13:
+		suffix = "th"
+	default:
+		switch n % 10 {
+		case 1:
+			suffix = "st"
+		case 2:
+			suffix = "nd"
+		case 3:
+			suffix = "rd"
+		}
+	}
+	return fmt.Sprintf(" on the %d%s", n, suffix)
+}
+
+// pad2 zero-pads a numeric field to two digits, falling back to the raw
+// value when it is not a plain integer.
+func pad2(v string) string {
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return v
+	}
+	return fmt.Sprintf("%02d", n)
+}
+
+func isEvery(fields ...string) bool {
+	for _, f := range fields {
+		if !isStar(f) {
+			return false
+		}
+	}
+	return true
+}
+
+func isStar(f string) bool {
+	return f == "*"
+}
 
 // ReportTypeOptions returns the available report types for the generate form.
 func ReportTypeOptions() []ReportTypeOption {

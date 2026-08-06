@@ -123,3 +123,47 @@ type ReportDetailData struct {
 	ContentHTML string
 	Citations   []Citation
 }
+
+// ScheduleItem is a single row in the schedules list table.
+type ScheduleItem struct {
+	ID          string
+	Type        string
+	TypeLabel   string
+	TypeIntent  string
+	CronExpr    string
+	CronHuman   string
+	Focus       string
+	Format      string
+	FormatLabel string
+	Enabled     bool
+}
+
+// ScheduleListData is the view model for the schedules list page.
+type ScheduleListData struct {
+	Schedules []ScheduleItem
+}
+
+// ScheduleTypeOption is an option in the schedule type selector.
+type ScheduleTypeOption struct {
+	Value string
+	Label string
+}
+
+// ReportFormatOption is an option in the report format selector.
+type ReportFormatOption struct {
+	Value string
+	Label string
+}
+
+// ScheduleFormData is the view model for the create/edit schedule form.
+type ScheduleFormData struct {
+	Editing       bool
+	ScheduleID    string
+	Type          string
+	CronExpr      string
+	Focus         string
+	Format        string
+	CSRFToken     string
+	TypeOptions   []ScheduleTypeOption
+	FormatOptions []ReportFormatOption
+}

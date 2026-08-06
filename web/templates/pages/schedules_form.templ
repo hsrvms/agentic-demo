@@ -1,0 +1,197 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+import "fmt"
+
+templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
+	@layouts.Base(ScheduleFormTitle(data.Editing), flashes) {
+		<div class="max-w-2xl mx-auto space-y-6">
+			<div>
+				<a href="/schedules" class="text-sm text-primary hover:text-primary-hover transition-colors inline-flex items-center gap-1">
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+					</svg>
+					Back to Schedules
+				</a>
+			</div>
+
+			<div class="bg-surface-card border border-border rounded-lg shadow-sm p-6">
+				<h1 class="text-2xl font-bold mb-6">{ ScheduleFormTitle(data.Editing) }</h1>
+
+				<div x-data={ scheduleFormAlpineData(data.Type, data.CronExpr) }>
+					<div id="schedule-form-error"></div>
+
+					<form
+						if data.Editing {
+							hx-put={ "/schedules/" + data.ScheduleID }
+						} else {
+							hx-post="/schedules"
+						}
+						hx-target="#schedule-form-error"
+						hx-swap="innerHTML"
+						@submit="submitted = true"
+						class="space-y-5"
+					>
+						<input type="hidden" name="_csrf" value={ data.CSRFToken }/>
+
+						// Schedule type selector.
+						<div class="space-y-1">
+							<label for="type" class="block text-sm font-medium text-content">
+								Report Type
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<select
+								id="type"
+								name="type"
+								x-model="scheduleType"
+								required
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && typeError() ? 'border-intent-error' : 'border-border'"
+							>
+								if !data.Editing {
+									<option value="">Select a cadence…</option>
+								}
+								for _, opt := range data.TypeOptions {
+									<option value={ opt.Value } selected={ opt.Value == data.Type }>{ opt.Label }</option>
+								}
+							</select>
+							<p
+								x-show="submitted && typeError()"
+								x-text="typeError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Cron expression with helper text.
+						<div class="space-y-1">
+							<label for="cron_expr" class="block text-sm font-medium text-content">
+								Cron Expression
+								<span class="text-intent-error" aria-hidden="true">*</span>
+							</label>
+							<input
+								id="cron_expr"
+								name="cron_expr"
+								type="text"
+								x-model="cron"
+								required
+								placeholder="0 9 * * *"
+								autocomplete="off"
+								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card font-mono placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && cronError() ? 'border-intent-error' : 'border-border'"
+							/>
+							<p class="text-xs text-content-muted" x-text="cronHint()"></p>
+							<p
+								x-show="submitted && cronError()"
+								x-text="cronError()"
+								x-cloak
+								class="text-sm text-intent-error"
+								role="alert"
+							></p>
+						</div>
+
+						// Focus text area.
+						<div class="space-y-1">
+							<label for="focus" class="block text-sm font-medium text-content">Focus Areas</label>
+							<textarea
+								id="focus"
+								name="focus"
+								rows="3"
+								placeholder="Optional: what should each report focus on?"
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+							>{ data.Focus }</textarea>
+							<p class="text-xs text-content-muted">Leave blank for a general report.</p>
+						</div>
+
+						// Report format selector.
+						<div class="space-y-1">
+							<label for="format" class="block text-sm font-medium text-content">Format</label>
+							<select
+								id="format"
+								name="format"
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+							>
+								for _, opt := range data.FormatOptions {
+									<option value={ opt.Value } selected={ opt.Value == data.Format }>{ opt.Label }</option>
+								}
+							</select>
+						</div>
+
+						// Actions.
+						<div class="flex items-center gap-3 pt-2">
+							<button
+								type="submit"
+								class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								x-bind:disabled="submitted && hasErrors"
+							>
+								<span class="htmx-indicator:hidden">
+									if data.Editing {
+										<span>Save Changes</span>
+									} else {
+										<span>Create Schedule</span>
+									}
+								</span>
+								<span class="htmx-indicator:flex hidden items-center gap-2">
+									<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+									</svg>
+									Saving…
+								</span>
+							</button>
+							<a
+								href="/schedules"
+								class="inline-flex items-center justify-center rounded-lg border border-border bg-surface-card px-4 py-2 text-sm font-medium text-content shadow-sm hover:bg-surface-page focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+							>
+								Cancel
+							</a>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+// ScheduleFormTitle returns the page title for the schedule form.
+func ScheduleFormTitle(editing bool) string {
+	if editing {
+		return "Edit Schedule"
+	}
+	return "Add Schedule"
+}
+
+// scheduleFormAlpineData builds the Alpine.js x-data attribute string with Go
+// values safely injected. Cron is validated client-side with a basic pattern
+// check; the server re-validates with the robfig/cron parser.
+func scheduleFormAlpineData(scheduleType, cron string) string {
+	return fmt.Sprintf(`{
+		scheduleType: %q,
+		cron: %q,
+		submitted: false,
+		typeError() {
+			if (!this.scheduleType) return 'Please select a report type'
+			return ''
+		},
+		cronError() {
+			if (!this.cron.trim()) return 'Cron expression is required'
+			const parts = this.cron.trim().split(/\s+/)
+			if (parts.length !== 5) return 'Cron must have exactly 5 fields'
+			const fieldRe = /^[0-9*\/,\-]+$/
+			for (const p of parts) {
+				if (!fieldRe.test(p)) return 'Fields may only contain digits, *, /, , or -'
+			}
+			return ''
+		},
+		cronHint() {
+			if (this.cronError()) return ''
+			if (!this.cron.trim()) return 'Five fields: minute hour day_of_month month day_of_week. Example: 0 9 * * * runs daily at 9:00 AM.'
+			return 'Valid cron expression'
+		},
+		get hasErrors() {
+			return this.typeError() !== '' || this.cronError() !== ''
+		}
+	}`, scheduleType, cron)
+}
