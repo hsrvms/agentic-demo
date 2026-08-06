@@ -1,0 +1,80 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+
+templ InvoiceDetail(data webui.InvoiceDetailData, flashes []webui.Flash) {
+	@layouts.Base("Invoice", flashes) {
+		<div class="space-y-6">
+			<div class="flex items-center justify-between">
+				<div>
+					<a href="/invoices" class="text-sm text-content-secondary hover:text-primary transition-colors">← Back to Invoices</a>
+					<h1 class="text-2xl font-bold tracking-tight mt-1">Invoice</h1>
+					if data.PeriodLabel != "" {
+						<p class="text-content-secondary mt-1">{ data.PeriodLabel }</p>
+					}
+				</div>
+				@InvoiceStatusBadge(data.StatusLabel, data.StatusIntent)
+			</div>
+
+			<div class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+				<div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border">
+					<div class="p-5">
+						<p class="text-sm font-medium text-content-secondary">Period Start</p>
+						<p class="text-lg font-semibold text-content mt-1">{ data.PeriodStart }</p>
+					</div>
+					<div class="p-5">
+						<p class="text-sm font-medium text-content-secondary">Period End</p>
+						<p class="text-lg font-semibold text-content mt-1">{ data.PeriodEnd }</p>
+					</div>
+					<div class="p-5">
+						<p class="text-sm font-medium text-content-secondary">Total Cost</p>
+						<p class="text-lg font-bold text-content mt-1">{ data.TotalCostUSD }</p>
+					</div>
+				</div>
+			</div>
+
+			<section aria-label="Line items" class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+				<div class="px-4 py-3 border-b border-border">
+					<h3 class="text-lg font-medium text-content">Line Items</h3>
+				</div>
+				if len(data.LineItems) == 0 {
+					<p class="px-4 py-8 text-center text-sm text-content-muted">No line items recorded for this billing period.</p>
+				} else {
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Model</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Input Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Output Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Tool Calls</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Embedding Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Reports</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Cost</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, li := range data.LineItems {
+									@InvoiceLineItemRow(li)
+								}
+							</tbody>
+						</table>
+					</div>
+				}
+			</section>
+		</div>
+	}
+}
+
+templ InvoiceLineItemRow(li webui.InvoiceLineItem) {
+	<tr class="border-b border-border hover:bg-surface-page transition-colors">
+		<td class="py-3 px-4 font-medium text-content">{ li.Model }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ li.InputTokens }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ li.OutputTokens }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ li.ToolCalls }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ li.EmbeddingTokens }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ li.ReportsGenerated }</td>
+		<td class="py-3 px-4 text-right font-medium text-content">{ li.CostUSD }</td>
+	</tr>
+}
