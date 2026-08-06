@@ -366,9 +366,9 @@ func (e *DashScopeNativeEmbedder) Embed(ctx context.Context, texts []string) ([]
 }
 
 type nativeEmbeddingRequest struct {
-	Model      string                 `json:"model"`
-	Input      nativeEmbeddingInput   `json:"input"`
-	Parameters nativeEmbeddingParams  `json:"parameters"`
+	Model      string                `json:"model"`
+	Input      nativeEmbeddingInput  `json:"input"`
+	Parameters nativeEmbeddingParams `json:"parameters"`
 }
 
 type nativeEmbeddingInput struct {
@@ -381,11 +381,11 @@ type nativeEmbeddingParams struct {
 }
 
 type nativeEmbeddingResponse struct {
-	StatusCode int                        `json:"status_code"`
-	RequestID  string                     `json:"request_id"`
-	Code       string                     `json:"code"`
-	Message    string                     `json:"message"`
-	Output     nativeEmbeddingOutput      `json:"output"`
+	StatusCode int                   `json:"status_code"`
+	RequestID  string                `json:"request_id"`
+	Code       string                `json:"code"`
+	Message    string                `json:"message"`
+	Output     nativeEmbeddingOutput `json:"output"`
 }
 
 type nativeEmbeddingOutput struct {
@@ -393,8 +393,8 @@ type nativeEmbeddingOutput struct {
 }
 
 type nativeEmbeddingData struct {
-	Embedding  []float32 `json:"embedding"`
-	TextIndex  int       `json:"text_index"`
+	Embedding []float32 `json:"embedding"`
+	TextIndex int       `json:"text_index"`
 }
 
 // --- Conversion helpers ---

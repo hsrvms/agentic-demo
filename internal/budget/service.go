@@ -22,8 +22,8 @@ type BudgetService interface {
 }
 
 type budgetService struct {
-	repo    Repository
-	reader  usage.UsageReader
+	repo      Repository
+	reader    usage.UsageReader
 	usageRepo usage.Repository
 }
 

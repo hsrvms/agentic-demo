@@ -293,9 +293,9 @@ func TestRegisterSubmit_Success(t *testing.T) {
 
 func TestRegisterSubmit_ValidationErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		regErr     error
-		wantMsg    string
+		name    string
+		regErr  error
+		wantMsg string
 	}{
 		{"user exists", auth.ErrUserExists, "already exists"},
 		{"invalid email", auth.ErrInvalidEmail, "valid email"},

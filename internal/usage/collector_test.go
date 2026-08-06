@@ -157,11 +157,11 @@ func TestCollector_Rollup(t *testing.T) {
 
 func TestParseUsageKey(t *testing.T) {
 	tests := []struct {
-		key          string
-		wantTenant   string
-		wantDate     string
-		wantModel    string
-		wantOk       bool
+		key        string
+		wantTenant string
+		wantDate   string
+		wantModel  string
+		wantOk     bool
 	}{
 		{"usage:tenant-1:2026-07-29:qwen-max", "tenant-1", "2026-07-29", "qwen-max", true},
 		{"usage:abc:2026-01-01:text-embedding-v4", "abc", "2026-01-01", "text-embedding-v4", true},

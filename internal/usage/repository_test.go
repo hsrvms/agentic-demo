@@ -16,13 +16,13 @@ import (
 
 // mockRepository implements Repository for testing.
 type mockRepository struct {
-	mu          sync.Mutex
-	events      []UsageEventRecord
-	dailyRows   []UsageDailyRecord
-	createErr   error
-	listErr     error
-	upsertErr   error
-	summaryErr  error
+	mu         sync.Mutex
+	events     []UsageEventRecord
+	dailyRows  []UsageDailyRecord
+	createErr  error
+	listErr    error
+	upsertErr  error
+	summaryErr error
 }
 
 func (m *mockRepository) CreateEvent(ctx context.Context, params *db.CreateUsageEventParams) (UsageEventRecord, error) {
@@ -140,13 +140,13 @@ func TestMockRepository_UpsertDaily(t *testing.T) {
 	ctx := context.Background()
 
 	rec, err := repo.UpsertDaily(ctx, &db.UpsertUsageDailyParams{
-		TenantID:        "tenant-1",
-		Date:            toPgDate(time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)),
-		LlmModel:        "qwen-max",
-		InputTokens:     1000,
-		OutputTokens:    500,
-		ToolCalls:       3,
-		EmbeddingTokens: 0,
+		TenantID:         "tenant-1",
+		Date:             toPgDate(time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)),
+		LlmModel:         "qwen-max",
+		InputTokens:      1000,
+		OutputTokens:     500,
+		ToolCalls:        3,
+		EmbeddingTokens:  0,
 		EstimatedCostUsd: toPgNumeric(0.005),
 		ReportsGenerated: 1,
 	})

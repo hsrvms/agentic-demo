@@ -103,7 +103,7 @@ func (a *AgentLoop) Run(ctx context.Context, tenantID domain.TenantID, config do
 		for _, tc := range result.ToolCalls {
 			if toolCallCount >= a.maxToolCalls {
 				// Max tool calls reached — force synthesis.
-				return a.synthesize(ctx, msgs, opts, tenantID, llmCallCount, toolCallCount)
+				return a.synthesize(ctx, msgs, opts, llmCallCount, toolCallCount)
 			}
 
 			// Duplicate detection.
@@ -149,16 +149,17 @@ func (a *AgentLoop) Run(ctx context.Context, tenantID domain.TenantID, config do
 	}
 
 	// Max LLM calls reached — force synthesis with what we have.
-	return a.synthesize(ctx, msgs, opts, tenantID, llmCallCount, toolCallCount)
+	return a.synthesize(ctx, msgs, opts, llmCallCount, toolCallCount)
 }
 
 // synthesize makes a final LLM call asking for the report, without tools.
-func (a *AgentLoop) synthesize(ctx context.Context, msgs []domain.Message, opts llm.Options, tenantID domain.TenantID, llmCalls, toolCalls int) (AgentResult, error) {
+func (a *AgentLoop) synthesize(ctx context.Context, msgs []domain.Message, opts llm.Options, llmCalls, toolCalls int) (AgentResult, error) {
 	// Remove tools to force text-only response.
 	synthOpts := opts
 	synthOpts.ToolSchemas = nil
 
-	synthMsgs := append(msgs, domain.Message{
+	synthMsgs := append([]domain.Message(nil), msgs...)
+	synthMsgs = append(synthMsgs, domain.Message{
 		Role:    "user",
 		Content: "You have gathered enough context. Please produce the final report now. Include source citations.",
 	})

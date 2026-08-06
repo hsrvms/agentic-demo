@@ -35,13 +35,13 @@ type Invoice struct {
 
 // InvoiceLineItem is a single line on an invoice, driven by usage_daily aggregates.
 type InvoiceLineItem struct {
-	Model           string  `json:"model"`
-	InputTokens     int64   `json:"input_tokens"`
-	OutputTokens    int64   `json:"output_tokens"`
-	ToolCalls       int32   `json:"tool_calls"`
-	EmbeddingTokens int64   `json:"embedding_tokens"`
-	ReportsGenerated int32  `json:"reports_generated"`
-	CostUSD         float64 `json:"cost_usd"`
+	Model            string  `json:"model"`
+	InputTokens      int64   `json:"input_tokens"`
+	OutputTokens     int64   `json:"output_tokens"`
+	ToolCalls        int32   `json:"tool_calls"`
+	EmbeddingTokens  int64   `json:"embedding_tokens"`
+	ReportsGenerated int32   `json:"reports_generated"`
+	CostUSD          float64 `json:"cost_usd"`
 }
 
 // InvoicePage is a paginated list of invoices.
@@ -64,8 +64,8 @@ type BudgetStatus struct {
 
 // BudgetCheckResult is returned by BudgetChecker.CheckBudget.
 type BudgetCheckResult struct {
-	Allowed          bool
-	BudgetStatus     *BudgetStatus
+	Allowed           bool
+	BudgetStatus      *BudgetStatus
 	EstimatedCallCost float64
 	ThresholdReached  string // "80%", "95%", or empty if below thresholds
 }

@@ -129,4 +129,3 @@ func (h *Handler) ListEvents(c echo.Context) error {
 func getTenantID(c echo.Context) string {
 	return string(auth.GetTenantID(c.Request().Context()))
 }
-

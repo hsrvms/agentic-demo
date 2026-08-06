@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/db"
@@ -172,10 +173,12 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
+	limit := int32Limit(topK)
+
 	params := db.QueryChunksParams{
 		TenantID:  string(tenantID),
 		Embedding: pgvector.NewVector(embeddings[0]),
-		Limit:     int32(topK),
+		Limit:     limit,
 	}
 
 	if filters.Source != "" {
@@ -194,7 +197,8 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 	}
 
 	results := make([]domain.RankedChunk, 0, len(rows))
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		var metadata map[string]string
 		if err := json.Unmarshal(row.Metadata, &metadata); err != nil {
 			return nil, fmt.Errorf("unmarshal metadata for chunk %s: %w", row.ID, err)
@@ -215,6 +219,17 @@ func (s *PgVectorStore) Query(ctx context.Context, tenantID domain.TenantID, tex
 	}
 
 	return results, nil
+}
+
+// int32Limit clamps topK to the int32 range used by the query SQL.
+func int32Limit(topK int) int32 {
+	if topK < 0 {
+		return 0
+	}
+	if topK > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(topK)
 }
 
 func (s *PgVectorStore) GetDocument(ctx context.Context, tenantID domain.TenantID, documentID string) (domain.Document, error) {

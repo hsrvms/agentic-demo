@@ -16,15 +16,15 @@ import (
 
 // mockService implements UsageService for testing.
 type mockService struct {
-	summary       *UsageSummary
-	current       *CurrentUsage
-	events        *UsageEventPage
-	summaryErr    error
-	currentErr    error
-	eventsErr     error
+	summary    *UsageSummary
+	current    *CurrentUsage
+	events     *UsageEventPage
+	summaryErr error
+	currentErr error
+	eventsErr  error
 }
 
-func (m *mockService) GetSummary(ctx context.Context, tenantID string, from, to string) (*UsageSummary, error) {
+func (m *mockService) GetSummary(ctx context.Context, tenantID, from, to string) (*UsageSummary, error) {
 	if m.summaryErr != nil {
 		return nil, m.summaryErr
 	}
@@ -45,10 +45,10 @@ func (m *mockService) ListEvents(ctx context.Context, tenantID string, page, pag
 	return m.events, nil
 }
 
-func setupEcho(t *testing.T) (*echo.Echo, echo.Context, *httptest.ResponseRecorder) {
+func setupEcho(t *testing.T) (echo.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -56,11 +56,11 @@ func setupEcho(t *testing.T) (*echo.Echo, echo.Context, *httptest.ResponseRecord
 	ctx := auth.SetTenantID(req.Context(), "tenant-1")
 	c.SetRequest(req.WithContext(ctx))
 
-	return e, c, rec
+	return c, rec
 }
 
 func TestHandler_GetSummary(t *testing.T) {
-	_, c, rec := setupEcho(t)
+	c, rec := setupEcho(t)
 	c.SetPath("/api/usage/summary")
 
 	svc := &mockService{
@@ -91,7 +91,7 @@ func TestHandler_GetSummary(t *testing.T) {
 }
 
 func TestHandler_GetSummary_InvalidDateRange(t *testing.T) {
-	_, c, _ := setupEcho(t)
+	c, _ := setupEcho(t)
 	c.SetPath("/api/usage/summary")
 
 	svc := &mockService{summaryErr: ErrInvalidDateRange}
@@ -106,20 +106,20 @@ func TestHandler_GetSummary_InvalidDateRange(t *testing.T) {
 }
 
 func TestHandler_GetCurrent(t *testing.T) {
-	_, c, rec := setupEcho(t)
+	c, rec := setupEcho(t)
 	c.SetPath("/api/usage/current")
 
 	svc := &mockService{
 		current: &CurrentUsage{
-			TenantID:              "tenant-1",
-			PeriodStart:           time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
-			PeriodEnd:             time.Date(2026, 7, 31, 23, 59, 59, 0, time.UTC),
-			TotalInputTokens:      1000,
-			TotalOutputTokens:     500,
-			TotalToolCalls:        3,
-			TotalEmbeddingTokens:  100,
-			TotalCostUSD:          0.00501,
-			ReportsGenerated:      1,
+			TenantID:             "tenant-1",
+			PeriodStart:          time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+			PeriodEnd:            time.Date(2026, 7, 31, 23, 59, 59, 0, time.UTC),
+			TotalInputTokens:     1000,
+			TotalOutputTokens:    500,
+			TotalToolCalls:       3,
+			TotalEmbeddingTokens: 100,
+			TotalCostUSD:         0.00501,
+			ReportsGenerated:     1,
 			ByModel: []ModelUsage{
 				{Model: "qwen-max", InputTokens: 1000, OutputTokens: 500, ToolCalls: 3, CostUSD: 0.005},
 			},
@@ -140,7 +140,7 @@ func TestHandler_GetCurrent(t *testing.T) {
 }
 
 func TestHandler_ListEvents(t *testing.T) {
-	_, c, rec := setupEcho(t)
+	c, rec := setupEcho(t)
 	c.SetPath("/api/usage/events")
 
 	payload := json.RawMessage(`{"model":"qwen-max"}`)
@@ -170,7 +170,7 @@ func TestHandler_ListEvents(t *testing.T) {
 }
 
 func TestHandler_ListEvents_InvalidTenantID(t *testing.T) {
-	_, c, _ := setupEcho(t)
+	c, _ := setupEcho(t)
 	c.SetPath("/api/usage/events")
 
 	svc := &mockService{eventsErr: ErrInvalidTenantID}
@@ -185,7 +185,7 @@ func TestHandler_ListEvents_InvalidTenantID(t *testing.T) {
 }
 
 func TestHandler_InternalError(t *testing.T) {
-	_, c, _ := setupEcho(t)
+	c, _ := setupEcho(t)
 	c.SetPath("/api/usage/current")
 
 	svc := &mockService{currentErr: assert.AnError}

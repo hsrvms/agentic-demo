@@ -3,8 +3,9 @@ package usage
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/agentic-demo/platform/internal/db"
@@ -12,18 +13,18 @@ import (
 )
 
 const (
-	defaultFlushInterval = 30 * time.Second
+	defaultFlushInterval  = 30 * time.Second
 	defaultRollupInterval = 1 * time.Hour
-	flushBatchSize       = 100
-	flushPopTimeout      = 1 * time.Second
+	flushBatchSize        = 100
+	flushPopTimeout       = 1 * time.Second
 )
 
 // UsageCollector drains the Redis flush queue and rolls up counters
 // into PostgreSQL usage_events and usage_daily tables.
 type UsageCollector struct {
-	client  *redis.Client
-	repo    Repository
-	logger  *slog.Logger
+	client *redis.Client
+	repo   Repository
+	logger *slog.Logger
 
 	flushInterval  time.Duration
 	rollupInterval time.Duration
@@ -194,15 +195,15 @@ func (c *UsageCollector) rollup(ctx context.Context) {
 			}
 
 			params := db.UpsertUsageDailyParams{
-				TenantID:        tenantID,
-				Date:            toPgDate(parsedDate),
-				LlmModel:        model,
-				InputTokens:     parseFieldInt64(fields, "input_tokens"),
-				OutputTokens:    parseFieldInt64(fields, "output_tokens"),
-				ToolCalls:       int32(parseFieldInt64(fields, "tool_calls")),
-				EmbeddingTokens: parseFieldInt64(fields, "embedding_tokens"),
+				TenantID:         tenantID,
+				Date:             toPgDate(parsedDate),
+				LlmModel:         model,
+				InputTokens:      parseFieldInt64(fields, "input_tokens"),
+				OutputTokens:     parseFieldInt64(fields, "output_tokens"),
+				ToolCalls:        toInt32(parseFieldInt64(fields, "tool_calls")),
+				EmbeddingTokens:  parseFieldInt64(fields, "embedding_tokens"),
 				EstimatedCostUsd: toPgNumeric(parseFieldFloat64(fields, "estimated_cost_usd")),
-				ReportsGenerated: int32(parseFieldInt64(fields, "reports_generated")),
+				ReportsGenerated: toInt32(parseFieldInt64(fields, "reports_generated")),
 			}
 
 			if _, err := c.repo.UpsertDaily(ctx, &params); err != nil {
@@ -267,19 +268,36 @@ func indexOf(s, substr string) int {
 }
 
 func parseFieldInt64(fields map[string]string, key string) int64 {
-	if v, ok := fields[key]; ok {
-		var n int64
-		fmt.Sscanf(v, "%d", &n)
-		return n
+	v, ok := fields[key]
+	if !ok {
+		return 0
 	}
-	return 0
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func parseFieldFloat64(fields map[string]string, key string) float64 {
-	if v, ok := fields[key]; ok {
-		var f float64
-		fmt.Sscanf(v, "%f", &f)
-		return f
+	v, ok := fields[key]
+	if !ok {
+		return 0
 	}
-	return 0
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0
+	}
+	return f
+}
+
+// toInt32 clamps a 64-bit counter to the int32 range used by the DB schema.
+func toInt32(n int64) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(n)
 }

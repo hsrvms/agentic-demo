@@ -47,11 +47,11 @@ func (e *stubEmbedder) Model() string {
 	return "test-embedding"
 }
 
-// unitVector returns a vector with 1.0 at index idx and 0.0 elsewhere.
+// unitVector returns a 1024-dim unit vector with 1.0 at index idx and 0.0 elsewhere.
 // Two identical unit vectors have cosine distance 0; two orthogonal unit
 // vectors have cosine distance 1.
-func unitVector(dim, idx int) []float32 {
-	v := make([]float32, dim)
+func unitVector(idx int) []float32 {
+	v := make([]float32, 1024)
 	v[idx] = 1.0
 	return v
 }
@@ -84,7 +84,7 @@ func migrationSQL() ([]byte, error) {
 // It first attempts testcontainers (for CI with Docker). If Docker is
 // unavailable, it falls back to a running Postgres instance (e.g. in a
 // devcontainer) by creating an ephemeral test database.
-func setupStore(t *testing.T) (*PgVectorStore, func()) {
+func setupStore(t *testing.T) (store *PgVectorStore, cleanup func()) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -141,7 +141,7 @@ func setupStoreContainer(t *testing.T, ctx context.Context) (*PgVectorStore, fun
 	connStr := fmt.Sprintf("postgres://testuser:testpass@%s:%s/testdb?sslmode=disable", host, port.Port())
 	t.Logf("connection string: %s", connStr)
 
-	store, cleanup, err := connectAndMigrate(t, ctx, connStr)
+	store, cleanup, err := connectAndMigrate(ctx, connStr)
 	if err != nil {
 		pgContainer.Terminate(ctx)
 		return nil, nil, err
@@ -188,7 +188,7 @@ func setupStoreLocal(t *testing.T, ctx context.Context) (*PgVectorStore, func(),
 	}
 	t.Logf("connection string: %s", connStr)
 
-	store, cleanup, err := connectAndMigrate(t, ctx, connStr)
+	store, cleanup, err := connectAndMigrate(ctx, connStr)
 	if err != nil {
 		basePool.Exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
 		return nil, nil, err
@@ -221,7 +221,7 @@ func withDBName(connStr, dbName string) (string, error) {
 
 // connectAndMigrate connects to a database, runs the initial migration,
 // and returns a PgVectorStore and cleanup function.
-func connectAndMigrate(t *testing.T, ctx context.Context, connStr string) (*PgVectorStore, func(), error) {
+func connectAndMigrate(ctx context.Context, connStr string) (*PgVectorStore, func(), error) {
 	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create connection pool: %w", err)
@@ -250,9 +250,9 @@ func connectAndMigrate(t *testing.T, ctx context.Context, connStr string) (*PgVe
 }
 
 // setupStoreWithEmbedder is like setupStore but uses the provided embedder.
-func setupStoreWithEmbedder(t *testing.T, emb Embedder) (*PgVectorStore, func()) {
+func setupStoreWithEmbedder(t *testing.T, emb Embedder) (store *PgVectorStore, cleanup func()) {
 	t.Helper()
-	store, cleanup := setupStore(t)
+	store, cleanup = setupStore(t)
 	store.embedder = emb
 	return store, cleanup
 }
@@ -284,10 +284,10 @@ func TestKnowledgeStore_StoreAndQuery(t *testing.T) {
 	emb := &stubEmbedder{
 		dim: 1024,
 		vectors: map[string][]float32{
-			"revenue growth":                                unitVector(1024, 0),
-			"Quarterly revenue increased by 15%":            unitVector(1024, 0),
-			"Customer satisfaction scores dropped 3 points": unitVector(1024, 1),
-			"Employee headcount stable at 250":              unitVector(1024, 2),
+			"revenue growth":                                unitVector(0),
+			"Quarterly revenue increased by 15%":            unitVector(0),
+			"Customer satisfaction scores dropped 3 points": unitVector(1),
+			"Employee headcount stable at 250":              unitVector(2),
 		},
 	}
 	store, cleanup := setupStoreWithEmbedder(t, emb)
