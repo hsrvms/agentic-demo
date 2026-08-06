@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/usage"
@@ -183,6 +184,67 @@ func TestSourceTypeOptions(t *testing.T) {
 }
 
 // --- BudgetIntent ---
+
+func TestMapSettings(t *testing.T) {
+	tenant := &domain.Tenant{
+		ID:        "t_abc",
+		Name:      "Acme",
+		Status:    domain.TenantSuspended,
+		CreatedAt: time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC),
+	}
+	status := &budget.BudgetStatus{
+		MonthlyBudget:   100.0,
+		MonthToDateCost: 25.0,
+		RemainingBudget: 75.0,
+		PercentUsed:     25.0,
+	}
+
+	data := MapSettings(tenant, status)
+
+	assert.Equal(t, "Acme", data.TenantName)
+	assert.Equal(t, "t_abc", data.TenantID)
+	assert.Equal(t, "suspended", data.TenantStatus)
+	assert.Equal(t, "Suspended", data.TenantStatusLabel)
+	assert.Equal(t, "warning", data.TenantStatusIntent)
+	assert.Equal(t, "Feb 03, 2026 04:05", data.CreatedAt)
+	assert.Equal(t, "$100.00", data.MonthlyBudget)
+	assert.Equal(t, "$25.00", data.MTDCost)
+	assert.Equal(t, "$75.00", data.Remaining)
+	assert.InDelta(t, 25.0, data.PercentUsed, 0.001)
+	assert.Equal(t, "success", data.BudgetIntent)
+	assert.False(t, data.BudgetExceeded)
+}
+
+func TestMapSettings_NilBudgetStatus(t *testing.T) {
+	tenant := &domain.Tenant{ID: "t_abc", Name: "Acme", Status: domain.TenantActive}
+
+	data := MapSettings(tenant, nil)
+
+	assert.Equal(t, "Acme", data.TenantName)
+	assert.Equal(t, "Active", data.TenantStatusLabel)
+	assert.Equal(t, "success", data.TenantStatusIntent)
+	// Zero-value budget fields when no status is available.
+	assert.Equal(t, "$0.00", data.MonthlyBudget)
+	assert.Equal(t, "$0.00", data.MTDCost)
+	assert.Equal(t, "$0.00", data.Remaining)
+	assert.Equal(t, "success", data.BudgetIntent)
+}
+
+func TestMapSettings_ExceededBudget(t *testing.T) {
+	tenant := &domain.Tenant{ID: "t_abc", Name: "Acme", Status: domain.TenantActive}
+	status := &budget.BudgetStatus{
+		MonthlyBudget:   50.0,
+		MonthToDateCost: 60.0,
+		RemainingBudget: 0.0,
+		PercentUsed:     120.0,
+		IsExceeded:      true,
+	}
+
+	data := MapSettings(tenant, status)
+
+	assert.True(t, data.BudgetExceeded)
+	assert.Equal(t, "error", data.BudgetIntent)
+}
 
 func TestBudgetIntent(t *testing.T) {
 	tests := []struct {

@@ -35,14 +35,16 @@ func (m *mockAuthService) ValidateToken(_ context.Context, _ string) (*domain.Au
 }
 
 type mockTenantService struct {
-	tenants  map[domain.TenantID]domain.Tenant
-	members  map[string]bool // "userID:tenantID" → bool
+	tenants map[domain.TenantID]domain.Tenant
+	members map[string]bool // "userID:tenantID" → bool
+	isAdmin bool
 }
 
 func newMockTenantService() *mockTenantService {
 	return &mockTenantService{
 		tenants: make(map[domain.TenantID]domain.Tenant),
 		members: make(map[string]bool),
+		isAdmin: true,
 	}
 }
 
@@ -76,7 +78,7 @@ func (m *mockTenantService) Delete(_ context.Context, _ domain.TenantID) error {
 }
 
 func (m *mockTenantService) IsAdmin(_ context.Context, _ domain.TenantID, _ uuid.UUID) (bool, error) {
-	return true, nil
+	return m.isAdmin, nil
 }
 
 // Compile-time checks.
