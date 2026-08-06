@@ -1,0 +1,52 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+
+templ SchedulesList(data webui.ScheduleListData, csrfToken string, flashes []webui.Flash) {
+	@layouts.Base("Schedules", flashes) {
+		<div class="space-y-6">
+			<div class="flex items-center justify-between">
+				<div>
+					<h1 class="text-3xl font-bold tracking-tight">Schedules</h1>
+					<p class="text-content-secondary mt-1">Automate report generation on a recurring schedule</p>
+				</div>
+				<a
+					href="/schedules/new"
+					class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+					Add Schedule
+				</a>
+			</div>
+
+			if len(data.Schedules) == 0 {
+				@ScheduleEmptyState()
+			} else {
+				<div class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Type</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Schedule</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Focus</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Format</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Enabled</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Actions</th>
+								</tr>
+							</thead>
+							<tbody id="schedules-table-body">
+								for _, s := range data.Schedules {
+									@ScheduleRow(s, csrfToken)
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}

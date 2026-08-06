@@ -7,6 +7,7 @@ import (
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
+	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/tenant"
 	"github.com/agentic-demo/platform/internal/usage"
@@ -20,6 +21,7 @@ type Server struct {
 	dashboardHandler *DashboardHandler
 	sourcesHandler   *SourcesHandler
 	reportsHandler   *ReportsHandler
+	schedulesHandler *SchedulesHandler
 	authService      auth.AuthService
 	tenantService    tenant.TenantService
 	secureCookies    bool
@@ -58,6 +60,13 @@ func WithSources(sourceCore *sources.HandlerCore) ServerOption {
 func WithReports(reportService reports.ReportService, jobQueue queue.JobQueue) ServerOption {
 	return func(s *Server) {
 		s.reportsHandler = NewReportsHandler(reportService, jobQueue)
+	}
+}
+
+// WithSchedules wires the report schedule management handler.
+func WithSchedules(scheduleService scheduling.ScheduleService) ServerOption {
+	return func(s *Server) {
+		s.schedulesHandler = NewSchedulesHandler(scheduleService)
 	}
 }
 
@@ -115,6 +124,11 @@ func (s *Server) Register(e *echo.Group) {
 	// Report browsing routes.
 	if s.reportsHandler != nil {
 		s.reportsHandler.Register(authGroup)
+	}
+
+	// Report schedule management routes.
+	if s.schedulesHandler != nil {
+		s.schedulesHandler.Register(authGroup)
 	}
 }
 
