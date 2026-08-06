@@ -3,6 +3,7 @@ package pages
 import "github.com/agentic-demo/platform/internal/webui"
 import "github.com/agentic-demo/platform/web/templates/layouts"
 import "fmt"
+import "strconv"
 
 templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 	@layouts.Base(ScheduleFormTitle(data.Editing), flashes) {
@@ -19,7 +20,7 @@ templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 			<div class="bg-surface-card border border-border rounded-lg shadow-sm p-6">
 				<h1 class="text-2xl font-bold mb-6">{ ScheduleFormTitle(data.Editing) }</h1>
 
-				<div x-data={ scheduleFormAlpineData(data.Type, data.CronExpr) }>
+				<div x-data={ scheduleFormAlpineData(data.Type, data.Time, data.DayOfWeek, data.DayOfMonth) }>
 					<div id="schedule-form-error"></div>
 
 					<form
@@ -35,7 +36,7 @@ templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 					>
 						<input type="hidden" name="_csrf" value={ data.CSRFToken }/>
 
-						// Schedule type selector.
+						// Schedule type selector drives the cadence structure.
 						<div class="space-y-1">
 							<label for="type" class="block text-sm font-medium text-content">
 								Report Type
@@ -47,7 +48,7 @@ templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 								x-model="scheduleType"
 								required
 								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
-								x-bind:class="submitted && typeError() ? 'border-intent-error' : 'border-border'"
+								x-bind:class="submitted && scheduleType === '' ? 'border-intent-error' : 'border-border'"
 							>
 								if !data.Editing {
 									<option value="">Select a cadence…</option>
@@ -57,39 +58,68 @@ templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 								}
 							</select>
 							<p
-								x-show="submitted && typeError()"
-								x-text="typeError()"
+								x-show="submitted && scheduleType === ''"
+								x-text="'Please select a report type'"
 								x-cloak
 								class="text-sm text-intent-error"
 								role="alert"
 							></p>
 						</div>
 
-						// Cron expression with helper text.
+						// Time of day — friendly, no cron syntax required.
 						<div class="space-y-1">
-							<label for="cron_expr" class="block text-sm font-medium text-content">
-								Cron Expression
+							<label for="time" class="block text-sm font-medium text-content">
+								Time of Day
 								<span class="text-intent-error" aria-hidden="true">*</span>
 							</label>
 							<input
-								id="cron_expr"
-								name="cron_expr"
-								type="text"
-								x-model="cron"
+								id="time"
+								name="time"
+								type="time"
+								x-model="time"
+								value={ data.Time }
 								required
-								placeholder="0 9 * * *"
-								autocomplete="off"
-								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card font-mono placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
-								x-bind:class="submitted && cronError() ? 'border-intent-error' : 'border-border'"
+								class="block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+								x-bind:class="submitted && timeError() ? 'border-intent-error' : 'border-border'"
 							/>
-							<p class="text-xs text-content-muted" x-text="cronHint()"></p>
 							<p
-								x-show="submitted && cronError()"
-								x-text="cronError()"
+								x-show="submitted && timeError()"
+								x-text="timeError()"
 								x-cloak
 								class="text-sm text-intent-error"
 								role="alert"
 							></p>
+						</div>
+
+						// Day of week — only for weekly schedules.
+						<div x-show="scheduleType === 'weekly'" x-cloak class="space-y-1">
+							<label for="day_of_week" class="block text-sm font-medium text-content">Day of Week</label>
+							<select
+								id="day_of_week"
+								name="day_of_week"
+								x-model="dayOfWeek"
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+							>
+								for _, opt := range webui.WeekdayOptions() {
+									<option value={ opt.Value } selected={ opt.Value == data.DayOfWeek }>{ opt.Label }</option>
+								}
+							</select>
+						</div>
+
+						// Day of month — only for monthly schedules.
+						<div x-show="scheduleType === 'monthly'" x-cloak class="space-y-1">
+							<label for="day_of_month" class="block text-sm font-medium text-content">Day of Month</label>
+							<select
+								id="day_of_month"
+								name="day_of_month"
+								x-model="dayOfMonth"
+								class="block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+							>
+								// 1..31 generated inline.
+								for n := 1; n <= 31; n++ {
+									<option value={ strconv.Itoa(n) } selected={ strconv.Itoa(n) == data.DayOfMonth }>{ strconv.Itoa(n) }</option>
+								}
+							</select>
 						</div>
 
 						// Focus text area.
@@ -117,6 +147,17 @@ templ ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) {
 									<option value={ opt.Value } selected={ opt.Value == data.Format }>{ opt.Label }</option>
 								}
 							</select>
+						</div>
+
+						// Live preview of the generated schedule.
+						<div
+							class="rounded-lg border border-border bg-surface-page p-4"
+							x-show="scheduleType !== ''"
+							x-cloak
+						>
+							<p class="text-xs font-medium text-content-muted uppercase tracking-wide">Schedule Preview</p>
+							<p class="text-sm text-content mt-1" x-text="previewText()"></p>
+							<p class="font-mono text-xs text-content-muted mt-1" x-text="previewCron()"></p>
 						</div>
 
 						// Actions.
@@ -164,34 +205,51 @@ func ScheduleFormTitle(editing bool) string {
 }
 
 // scheduleFormAlpineData builds the Alpine.js x-data attribute string with Go
-// values safely injected. Cron is validated client-side with a basic pattern
-// check; the server re-validates with the robfig/cron parser.
-func scheduleFormAlpineData(scheduleType, cron string) string {
+// values safely injected. The cron expression is generated live from the
+// friendly inputs and shown as a read-only preview; the server rebuilds and
+// validates it on submit.
+func scheduleFormAlpineData(scheduleType, timeOfDay, dayOfWeek, dayOfMonth string) string {
 	return fmt.Sprintf(`{
 		scheduleType: %q,
-		cron: %q,
+		time: %q,
+		dayOfWeek: %q,
+		dayOfMonth: %q,
 		submitted: false,
-		typeError() {
-			if (!this.scheduleType) return 'Please select a report type'
+		timeError() {
+			if (!this.time) return 'Please select a time of day'
 			return ''
 		},
-		cronError() {
-			if (!this.cron.trim()) return 'Cron expression is required'
-			const parts = this.cron.trim().split(/\s+/)
-			if (parts.length !== 5) return 'Cron must have exactly 5 fields'
-			const fieldRe = /^[0-9*\/,\-]+$/
-			for (const p of parts) {
-				if (!fieldRe.test(p)) return 'Fields may only contain digits, *, /, , or -'
+		previewCron() {
+			const t = (this.time || '09:00').split(':')
+			const h = t[0], m = t[1]
+			switch (this.scheduleType) {
+				case 'daily': return m + ' ' + h + ' * * *'
+				case 'weekly': return m + ' ' + h + ' * * ' + (this.dayOfWeek || '1')
+				case 'monthly': return m + ' ' + h + ' ' + (this.dayOfMonth || '1') + ' * *'
+				default: return ''
 			}
-			return ''
 		},
-		cronHint() {
-			if (this.cronError()) return ''
-			if (!this.cron.trim()) return 'Five fields: minute hour day_of_month month day_of_week. Example: 0 9 * * * runs daily at 9:00 AM.'
-			return 'Valid cron expression'
+		previewText() {
+			const t = this.time || '09:00'
+			switch (this.scheduleType) {
+				case 'daily': return 'Every day at ' + t
+				case 'weekly': return 'Every ' + this.dayLabel(this.dayOfWeek || '1') + ' at ' + t
+				case 'monthly': return 'Monthly on the ' + this.ordinal(this.dayOfMonth || '1') + ' at ' + t
+				default: return ''
+			}
+		},
+		dayLabel(v) {
+			const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+			return days[Number(v)] || 'Monday'
+		},
+		ordinal(v) {
+			const n = Number(v)
+			const s = ['th','st','nd','rd']
+			const x = n %% 100
+			return n + (s[(x - 20) %% 10] || s[x] || s[0])
 		},
 		get hasErrors() {
-			return this.typeError() !== '' || this.cronError() !== ''
+			return this.scheduleType === '' || this.timeError() !== ''
 		}
-	}`, scheduleType, cron)
+	}`, scheduleType, timeOfDay, dayOfWeek, dayOfMonth)
 }

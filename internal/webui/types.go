@@ -3,6 +3,13 @@
 // avoiding import cycles.
 package webui
 
+import "errors"
+
+// ErrInvalidTime is returned when a schedule form supplies an unparseable
+// "HH:MM" time of day.
+var ErrInvalidTime = errors.New("invalid time of day")
+
+
 // Flash represents a flash message shown once to the user.
 type Flash struct {
 	Intent  string // "success", "error", "warning", "info"
@@ -160,10 +167,18 @@ type ScheduleFormData struct {
 	Editing       bool
 	ScheduleID    string
 	Type          string
-	CronExpr      string
+	Time          string // "HH:MM" time of day
+	DayOfWeek     string // cron weekday (0-6), only used for weekly
+	DayOfMonth    string // "1"-"31", only used for monthly
 	Focus         string
 	Format        string
 	CSRFToken     string
 	TypeOptions   []ScheduleTypeOption
 	FormatOptions []ReportFormatOption
+}
+
+// WeekdayOption is an option in the weekly day-of-week selector.
+type WeekdayOption struct {
+	Value string
+	Label string
 }

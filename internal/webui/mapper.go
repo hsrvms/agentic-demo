@@ -317,6 +317,77 @@ func ReportFormatOptions() []ReportFormatOption {
 	}
 }
 
+// WeekdayOptions returns the day-of-week options for weekly schedules, using
+// the cron convention (0 = Sunday … 6 = Saturday).
+func WeekdayOptions() []WeekdayOption {
+	return []WeekdayOption{
+		{Value: "0", Label: "Sunday"},
+		{Value: "1", Label: "Monday"},
+		{Value: "2", Label: "Tuesday"},
+		{Value: "3", Label: "Wednesday"},
+		{Value: "4", Label: "Thursday"},
+		{Value: "5", Label: "Friday"},
+		{Value: "6", Label: "Saturday"},
+	}
+}
+
+// BuildCronExpr composes a 5-field cron expression from friendly form inputs.
+// The schedule type determines the cadence structure; only the relevant day
+// field is used (day of week for weekly, day of month for monthly). Empty day
+// fields fall back to sensible defaults (Monday for weekly, the 1st for
+// monthly). It returns ErrInvalidScheduleType for an unknown type and
+// ErrInvalidTime for an unparseable time.
+func BuildCronExpr(scheduleType, timeOfDay, dayOfWeek, dayOfMonth string) (string, error) {
+	hour, minute, err := parseClock(timeOfDay)
+	if err != nil {
+		return "", err
+	}
+
+	switch scheduling.ScheduleType(scheduleType) {
+	case scheduling.ScheduleDaily:
+		return fmt.Sprintf("%d %d * * *", minute, hour), nil
+	case scheduling.ScheduleWeekly:
+		dow := dayOfWeek
+		if dow == "" {
+			dow = "1" // Monday
+		}
+		return fmt.Sprintf("%d %d * * %s", minute, hour, dow), nil
+	case scheduling.ScheduleMonthly:
+		dom := dayOfMonth
+		if dom == "" {
+			dom = "1"
+		}
+		return fmt.Sprintf("%d %d %s * *", minute, hour, dom), nil
+	default:
+		return "", scheduling.ErrInvalidScheduleType
+	}
+}
+
+// CronParts decomposes a 5-field cron expression back into the friendly form
+// fields (time of day, day of week, day of month) so the edit form can prefill
+// its selections. Unparseable expressions return all empty strings.
+func CronParts(expr string) (timeOfDay, dayOfWeek, dayOfMonth string) {
+	parts := strings.Fields(expr)
+	if len(parts) != 5 {
+		return "", "", ""
+	}
+	return pad2(parts[1]) + ":" + pad2(parts[0]), parts[4], parts[2]
+}
+
+// parseClock parses an "HH:MM" (24-hour) time string into hour and minute
+// integers. It returns ErrInvalidTime for malformed input.
+func parseClock(t string) (hour, minute int, err error) {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return 0, 0, ErrInvalidTime
+	}
+	parsed, perr := time.Parse("15:04", t)
+	if perr != nil {
+		return 0, 0, ErrInvalidTime
+	}
+	return parsed.Hour(), parsed.Minute(), nil
+}
+
 // DescribeCron renders a 5-field cron expression as a human-readable phrase.
 // Unparseable expressions fall back to the raw expression.
 func DescribeCron(expr string) string {

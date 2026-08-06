@@ -109,6 +109,71 @@ func TestScheduleFormatLabel(t *testing.T) {
 
 // --- DescribeCron ---
 
+// --- BuildCronExpr ---
+
+func TestBuildCronExpr(t *testing.T) {
+	cases := []struct {
+		name, scheduleType, timeOD, dow, dom, want string
+		wantErr                                    bool
+	}{
+		{"daily", "daily", "09:00", "", "", "0 9 * * *", false},
+		{"weekly monday", "weekly", "08:00", "1", "", "0 8 * * 1", false},
+		{"weekly default monday", "weekly", "08:00", "", "", "0 8 * * 1", false},
+		{"monthly 15th", "monthly", "09:30", "", "15", "30 9 15 * *", false},
+		{"monthly default first", "monthly", "09:00", "", "", "0 9 1 * *", false},
+		{"invalid type", "bogus", "09:00", "", "", "", true},
+		{"invalid time", "daily", "not-a-time", "", "", "", true},
+		{"empty time", "daily", "", "", "", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := BuildCronExpr(tc.scheduleType, tc.timeOD, tc.dow, tc.dom)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// --- CronParts ---
+
+func TestCronParts(t *testing.T) {
+	timeOD, dow, dom := CronParts("0 9 * * *")
+	assert.Equal(t, "09:00", timeOD)
+	assert.Equal(t, "*", dow)
+	assert.Equal(t, "*", dom)
+
+	timeOD, dow, dom = CronParts("30 8 * * 3")
+	assert.Equal(t, "08:30", timeOD)
+	assert.Equal(t, "3", dow)
+	assert.Equal(t, "*", dom)
+
+	timeOD, dow, dom = CronParts("0 9 15 * *")
+	assert.Equal(t, "09:00", timeOD)
+	assert.Equal(t, "*", dow)
+	assert.Equal(t, "15", dom)
+
+	// Unparseable -> empty.
+	timeOD, dow, dom = CronParts("0 9")
+	assert.Equal(t, "", timeOD)
+	assert.Equal(t, "", dow)
+	assert.Equal(t, "", dom)
+}
+
+// --- WeekdayOptions ---
+
+func TestWeekdayOptions(t *testing.T) {
+	opts := WeekdayOptions()
+	require.Len(t, opts, 7)
+	assert.Equal(t, "0", opts[0].Value)
+	assert.Equal(t, "Sunday", opts[0].Label)
+	assert.Equal(t, "6", opts[6].Value)
+	assert.Equal(t, "Saturday", opts[6].Label)
+}
+
 func TestDescribeCron(t *testing.T) {
 	cases := []struct {
 		name string

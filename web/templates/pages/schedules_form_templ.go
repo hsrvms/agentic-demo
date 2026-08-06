@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import "github.com/agentic-demo/platform/internal/webui"
 import "github.com/agentic-demo/platform/web/templates/layouts"
 import "fmt"
+import "strconv"
 
 func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -52,7 +53,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(ScheduleFormTitle(data.Editing))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 20, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 21, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -63,9 +64,9 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
-			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(scheduleFormAlpineData(data.Type, data.CronExpr))
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(scheduleFormAlpineData(data.Type, data.Time, data.DayOfWeek, data.DayOfMonth))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 22, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 23, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -83,7 +84,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue("/schedules/" + data.ScheduleID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 27, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 28, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
@@ -106,13 +107,13 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.CSRFToken)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 36, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 37, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><div class=\"space-y-1\"><label for=\"type\" class=\"block text-sm font-medium text-content\">Report Type <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <select id=\"type\" name=\"type\" x-model=\"scheduleType\" required class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && typeError() ? 'border-intent-error' : 'border-border'\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><div class=\"space-y-1\"><label for=\"type\" class=\"block text-sm font-medium text-content\">Report Type <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <select id=\"type\" name=\"type\" x-model=\"scheduleType\" required class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && scheduleType === '' ? 'border-intent-error' : 'border-border'\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -130,7 +131,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 56, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 57, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 				if templ_7745c5c3_Err != nil {
@@ -143,7 +144,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value == data.Type)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 56, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 57, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -156,7 +157,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 56, Col: 84}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 57, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -167,24 +168,24 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select><p x-show=\"submitted && typeError()\" x-text=\"typeError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div class=\"space-y-1\"><label for=\"cron_expr\" class=\"block text-sm font-medium text-content\">Cron Expression <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"cron_expr\" name=\"cron_expr\" type=\"text\" x-model=\"cron\" required placeholder=\"0 9 * * *\" autocomplete=\"off\" class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card font-mono placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && cronError() ? 'border-intent-error' : 'border-border'\"><p class=\"text-xs text-content-muted\" x-text=\"cronHint()\"></p><p x-show=\"submitted && cronError()\" x-text=\"cronError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div class=\"space-y-1\"><label for=\"focus\" class=\"block text-sm font-medium text-content\">Focus Areas</label> <textarea id=\"focus\" name=\"focus\" rows=\"3\" placeholder=\"Optional: what should each report focus on?\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select><p x-show=\"submitted && scheduleType === ''\" x-text=\"'Please select a report type'\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div class=\"space-y-1\"><label for=\"time\" class=\"block text-sm font-medium text-content\">Time of Day <span class=\"text-intent-error\" aria-hidden=\"true\">*</span></label> <input id=\"time\" name=\"time\" type=\"time\" x-model=\"time\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(data.Focus)
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Time)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 104, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 80, Col: 25}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</textarea><p class=\"text-xs text-content-muted\">Leave blank for a general report.</p></div><div class=\"space-y-1\"><label for=\"format\" class=\"block text-sm font-medium text-content\">Format</label> <select id=\"format\" name=\"format\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			for _, opt := range data.FormatOptions {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" required class=\"block w-full rounded-lg border px-3 py-2 text-sm text-content bg-surface-card focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\" x-bind:class=\"submitted && timeError() ? 'border-intent-error' : 'border-border'\"><p x-show=\"submitted && timeError()\" x-text=\"timeError()\" x-cloak class=\"text-sm text-intent-error\" role=\"alert\"></p></div><div x-show=\"scheduleType === 'weekly'\" x-cloak class=\"space-y-1\"><label for=\"day_of_week\" class=\"block text-sm font-medium text-content\">Day of Week</label> <select id=\"day_of_week\" name=\"day_of_week\" x-model=\"dayOfWeek\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, opt := range webui.WeekdayOptions() {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<option value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -192,7 +193,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 117, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 104, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
@@ -203,9 +204,9 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var12 string
-				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value == data.Format)
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value == data.DayOfWeek)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 117, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 104, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 				if templ_7745c5c3_Err != nil {
@@ -218,7 +219,7 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 117, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 104, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {
@@ -229,22 +230,133 @@ func ScheduleForm(data webui.ScheduleFormData, flashes []webui.Flash) templ.Comp
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</select></div><div class=\"flex items-center gap-3 pt-2\"><button type=\"submit\" class=\"inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed\" x-bind:disabled=\"submitted && hasErrors\"><span class=\"htmx-indicator:hidden\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</select></div><div x-show=\"scheduleType === 'monthly'\" x-cloak class=\"space-y-1\"><label for=\"day_of_month\" class=\"block text-sm font-medium text-content\">Day of Month</label> <select id=\"day_of_month\" name=\"day_of_month\" x-model=\"dayOfMonth\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for n := 1; n <= 31; n++ {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var14 string
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(n))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 120, Col: 40}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" selected=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var15 string
+				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(n) == data.DayOfMonth)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 120, Col: 88}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var16 string
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(n))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 120, Col: 108}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</select></div><div class=\"space-y-1\"><label for=\"focus\" class=\"block text-sm font-medium text-content\">Focus Areas</label> <textarea id=\"focus\" name=\"focus\" rows=\"3\" placeholder=\"Optional: what should each report focus on?\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content placeholder:text-content-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var17 string
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(data.Focus)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 134, Col: 20}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</textarea><p class=\"text-xs text-content-muted\">Leave blank for a general report.</p></div><div class=\"space-y-1\"><label for=\"format\" class=\"block text-sm font-medium text-content\">Format</label> <select id=\"format\" name=\"format\" class=\"block w-full rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, opt := range data.FormatOptions {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var18 string
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 147, Col: 34}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\" selected=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var19 string
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(opt.Value == data.Format)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 147, Col: 72}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var20 string
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/pages/schedules_form.templ`, Line: 147, Col: 86}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</select></div><div class=\"rounded-lg border border-border bg-surface-page p-4\" x-show=\"scheduleType !== ''\" x-cloak><p class=\"text-xs font-medium text-content-muted uppercase tracking-wide\">Schedule Preview</p><p class=\"text-sm text-content mt-1\" x-text=\"previewText()\"></p><p class=\"font-mono text-xs text-content-muted mt-1\" x-text=\"previewCron()\"></p></div><div class=\"flex items-center gap-3 pt-2\"><button type=\"submit\" class=\"inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed\" x-bind:disabled=\"submitted && hasErrors\"><span class=\"htmx-indicator:hidden\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if data.Editing {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span>Save Changes</span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<span>Save Changes</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span>Create Schedule</span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<span>Create Schedule</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> <span class=\"htmx-indicator:flex hidden items-center gap-2\"><svg class=\"h-4 w-4 animate-spin\" viewBox=\"0 0 24 24\" fill=\"none\"><circle class=\"opacity-25\" cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\"></circle> <path class=\"opacity-75\" fill=\"currentColor\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z\"></path></svg> Saving…</span></button> <a href=\"/schedules\" class=\"inline-flex items-center justify-center rounded-lg border border-border bg-surface-card px-4 py-2 text-sm font-medium text-content shadow-sm hover:bg-surface-page focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors\">Cancel</a></div></form></div></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</span> <span class=\"htmx-indicator:flex hidden items-center gap-2\"><svg class=\"h-4 w-4 animate-spin\" viewBox=\"0 0 24 24\" fill=\"none\"><circle class=\"opacity-25\" cx=\"12\" cy=\"12\" r=\"10\" stroke=\"currentColor\" stroke-width=\"4\"></circle> <path class=\"opacity-75\" fill=\"currentColor\" d=\"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z\"></path></svg> Saving…</span></button> <a href=\"/schedules\" class=\"inline-flex items-center justify-center rounded-lg border border-border bg-surface-card px-4 py-2 text-sm font-medium text-content shadow-sm hover:bg-surface-page focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors\">Cancel</a></div></form></div></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -267,36 +379,53 @@ func ScheduleFormTitle(editing bool) string {
 }
 
 // scheduleFormAlpineData builds the Alpine.js x-data attribute string with Go
-// values safely injected. Cron is validated client-side with a basic pattern
-// check; the server re-validates with the robfig/cron parser.
-func scheduleFormAlpineData(scheduleType, cron string) string {
+// values safely injected. The cron expression is generated live from the
+// friendly inputs and shown as a read-only preview; the server rebuilds and
+// validates it on submit.
+func scheduleFormAlpineData(scheduleType, timeOfDay, dayOfWeek, dayOfMonth string) string {
 	return fmt.Sprintf(`{
 		scheduleType: %q,
-		cron: %q,
+		time: %q,
+		dayOfWeek: %q,
+		dayOfMonth: %q,
 		submitted: false,
-		typeError() {
-			if (!this.scheduleType) return 'Please select a report type'
+		timeError() {
+			if (!this.time) return 'Please select a time of day'
 			return ''
 		},
-		cronError() {
-			if (!this.cron.trim()) return 'Cron expression is required'
-			const parts = this.cron.trim().split(/\s+/)
-			if (parts.length !== 5) return 'Cron must have exactly 5 fields'
-			const fieldRe = /^[0-9*\/,\-]+$/
-			for (const p of parts) {
-				if (!fieldRe.test(p)) return 'Fields may only contain digits, *, /, , or -'
+		previewCron() {
+			const t = (this.time || '09:00').split(':')
+			const h = t[0], m = t[1]
+			switch (this.scheduleType) {
+				case 'daily': return m + ' ' + h + ' * * *'
+				case 'weekly': return m + ' ' + h + ' * * ' + (this.dayOfWeek || '1')
+				case 'monthly': return m + ' ' + h + ' ' + (this.dayOfMonth || '1') + ' * *'
+				default: return ''
 			}
-			return ''
 		},
-		cronHint() {
-			if (this.cronError()) return ''
-			if (!this.cron.trim()) return 'Five fields: minute hour day_of_month month day_of_week. Example: 0 9 * * * runs daily at 9:00 AM.'
-			return 'Valid cron expression'
+		previewText() {
+			const t = this.time || '09:00'
+			switch (this.scheduleType) {
+				case 'daily': return 'Every day at ' + t
+				case 'weekly': return 'Every ' + this.dayLabel(this.dayOfWeek || '1') + ' at ' + t
+				case 'monthly': return 'Monthly on the ' + this.ordinal(this.dayOfMonth || '1') + ' at ' + t
+				default: return ''
+			}
+		},
+		dayLabel(v) {
+			const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+			return days[Number(v)] || 'Monday'
+		},
+		ordinal(v) {
+			const n = Number(v)
+			const s = ['th','st','nd','rd']
+			const x = n %% 100
+			return n + (s[(x - 20) %% 10] || s[x] || s[0])
 		},
 		get hasErrors() {
-			return this.typeError() !== '' || this.cronError() !== ''
+			return this.scheduleType === '' || this.timeError() !== ''
 		}
-	}`, scheduleType, cron)
+	}`, scheduleType, timeOfDay, dayOfWeek, dayOfMonth)
 }
 
 var _ = templruntime.GeneratedTemplate

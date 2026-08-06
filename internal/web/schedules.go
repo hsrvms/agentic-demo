@@ -81,11 +81,15 @@ func (h *SchedulesHandler) EditForm(c echo.Context) error {
 		return h.scheduleError(err)
 	}
 
+	// Decompose the stored cron back into the friendly form fields.
+	timeOfDay, dayOfWeek, dayOfMonth := webui.CronParts(s.CronExpr)
 	data := webui.ScheduleFormData{
 		Editing:       true,
 		ScheduleID:    s.ID.String(),
 		Type:          string(s.Type),
-		CronExpr:      s.CronExpr,
+		Time:          timeOfDay,
+		DayOfWeek:     dayOfWeek,
+		DayOfMonth:    dayOfMonth,
 		Focus:         s.Focus,
 		Format:        s.Format,
 		CSRFToken:     GetCSRFToken(ctx),
@@ -96,15 +100,22 @@ func (h *SchedulesHandler) EditForm(c echo.Context) error {
 	return Render(c, http.StatusOK, webpages.ScheduleForm(data, flashes))
 }
 
-// Create handles POST /schedules.
+// Create handles POST /schedules. It composes the cron expression from the
+// friendly form inputs (type, time, and cadence-specific day) so the user
+// never has to author cron syntax directly.
 func (h *SchedulesHandler) Create(c echo.Context) error {
 	ctx := c.Request().Context()
 	tenantID := string(auth.GetTenantID(ctx))
 
+	cronExpr, err := h.formCronExpr(c)
+	if err != nil {
+		return h.formError(c, err)
+	}
+
 	params := &scheduling.CreateScheduleParams{
 		TenantID: tenantID,
 		Type:     scheduling.ScheduleType(c.FormValue("type")),
-		CronExpr: strings.TrimSpace(c.FormValue("cron_expr")),
+		CronExpr: cronExpr,
 		Focus:    strings.TrimSpace(c.FormValue("focus")),
 		Format:   strings.TrimSpace(c.FormValue("format")),
 	}
@@ -135,10 +146,15 @@ func (h *SchedulesHandler) Update(c echo.Context) error {
 		return h.formError(c, err)
 	}
 
+	cronExpr, err := h.formCronExpr(c)
+	if err != nil {
+		return h.formError(c, err)
+	}
+
 	params := &scheduling.UpdateScheduleParams{
 		ID:       id,
 		Type:     scheduling.ScheduleType(c.FormValue("type")),
-		CronExpr: strings.TrimSpace(c.FormValue("cron_expr")),
+		CronExpr: cronExpr,
 		Focus:    strings.TrimSpace(c.FormValue("focus")),
 		Format:   strings.TrimSpace(c.FormValue("format")),
 	}
@@ -211,6 +227,16 @@ func (h *SchedulesHandler) Toggle(c echo.Context) error {
 
 // --- helpers ---
 
+// formCronExpr composes the cron expression from the form's friendly inputs.
+func (h *SchedulesHandler) formCronExpr(c echo.Context) (string, error) {
+	return webui.BuildCronExpr(
+		c.FormValue("type"),
+		c.FormValue("time"),
+		c.FormValue("day_of_week"),
+		c.FormValue("day_of_month"),
+	)
+}
+
 // ownedSchedule fetches a schedule and verifies it belongs to the current
 // tenant, enforcing tenant isolation before any mutation.
 func (h *SchedulesHandler) ownedSchedule(ctx context.Context, tenantID string, id uuid.UUID) (scheduling.ReportSchedule, error) {
@@ -229,8 +255,10 @@ func (h *SchedulesHandler) ownedSchedule(ctx context.Context, tenantID string, i
 func (h *SchedulesHandler) formError(c echo.Context, err error) error {
 	message := "Something went wrong"
 	switch {
+	case errors.Is(err, webui.ErrInvalidTime):
+		message = "Please select a valid time of day"
 	case errors.Is(err, scheduling.ErrInvalidCronExpr):
-		message = "Invalid cron expression. Use 5 fields: minute hour day_of_month month day_of_week (e.g. 0 9 * * *)"
+		message = "The generated schedule is invalid"
 	case errors.Is(err, scheduling.ErrInvalidScheduleType):
 		message = "Please select a valid report type"
 	case errors.Is(err, scheduling.ErrScheduleAlreadyExists):

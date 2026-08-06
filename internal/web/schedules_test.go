@@ -18,15 +18,18 @@ import (
 
 // mockScheduleService implements scheduling.ScheduleService for tests.
 type mockScheduleService struct {
-	schedules []scheduling.ReportSchedule
-	schedule  scheduling.ReportSchedule
-	err       error
-	findErr   error
-	createErr error
-	updateErr error
+	schedules  []scheduling.ReportSchedule
+	schedule   scheduling.ReportSchedule
+	err        error
+	findErr    error
+	createErr  error
+	updateErr  error
+	lastCreate *scheduling.CreateScheduleParams
+	lastUpdate *scheduling.UpdateScheduleParams
 }
 
 func (m *mockScheduleService) Create(_ context.Context, p *scheduling.CreateScheduleParams) (scheduling.ReportSchedule, error) {
+	m.lastCreate = p
 	if m.createErr != nil {
 		return scheduling.ReportSchedule{}, m.createErr
 	}
@@ -56,6 +59,7 @@ func (m *mockScheduleService) ListByTenant(_ context.Context, _ string) ([]sched
 }
 
 func (m *mockScheduleService) Update(_ context.Context, p *scheduling.UpdateScheduleParams) (scheduling.ReportSchedule, error) {
+	m.lastUpdate = p
 	if m.updateErr != nil {
 		return scheduling.ReportSchedule{}, m.updateErr
 	}
@@ -190,9 +194,13 @@ func TestSchedulesHandler_NewForm_RendersFields(t *testing.T) {
 	// Format selector options.
 	assert.Contains(t, body, `value="concise"`)
 	assert.Contains(t, body, `value="detailed"`)
-	// Cron input + helper text.
-	assert.Contains(t, body, `name="cron_expr"`)
-	assert.Contains(t, body, "Five fields")
+	// Friendly inputs instead of a raw cron field.
+	assert.Contains(t, body, `name="time"`)
+	assert.Contains(t, body, `name="day_of_week"`)
+	assert.Contains(t, body, `name="day_of_month"`)
+	assert.NotContains(t, body, `name="cron_expr"`)
+	// Live schedule preview is present.
+	assert.Contains(t, body, "Schedule Preview")
 	// Submits via HTMX.
 	assert.Contains(t, body, `hx-post="/schedules"`)
 }
@@ -222,9 +230,12 @@ func TestSchedulesHandler_EditForm_PrefillsValues(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, "Edit Schedule")
 	assert.Contains(t, body, `hx-put="/schedules/`+id.String()+`"`)
-	assert.Contains(t, body, "0 9 1 * *")
-	assert.Contains(t, body, "Expansion")
+	// Prefilled friendly fields derived from the stored cron.
+	assert.Contains(t, body, `type="time"`)
+	assert.Contains(t, body, `value="09:00"`)
 	assert.Contains(t, body, `value="monthly" selected`)
+	assert.Contains(t, body, `value="1" selected`) // day of month
+	assert.Contains(t, body, "Expansion")
 	assert.Contains(t, body, `value="detailed" selected`)
 }
 
@@ -294,18 +305,47 @@ func postScheduleForm(t *testing.T, method, path, body string, htmx bool) (echo.
 }
 
 func TestSchedulesHandler_Create_Success_HTMX(t *testing.T) {
-	handler := NewSchedulesHandler(&mockScheduleService{})
-	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&cron_expr=0+9+*+*+*&focus=Revenue&format=standard", true)
+	svc := &mockScheduleService{}
+	handler := NewSchedulesHandler(svc)
+	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&time=09:00&focus=Revenue&format=standard", true)
 
 	err := handler.Create(c)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "/schedules", rec.Header().Get("HX-Redirect"))
+
+	// The cron is composed from the friendly inputs, not typed by the user.
+	require.NotNil(t, svc.lastCreate)
+	assert.Equal(t, "0 9 * * *", svc.lastCreate.CronExpr)
+	assert.Equal(t, scheduling.ScheduleDaily, svc.lastCreate.Type)
+	assert.Equal(t, "Revenue", svc.lastCreate.Focus)
+}
+
+func TestSchedulesHandler_Create_WeeklyComposesDayOfWeek(t *testing.T) {
+	svc := &mockScheduleService{}
+	handler := NewSchedulesHandler(svc)
+	c, _ := postScheduleForm(t, http.MethodPost, "/schedules", "type=weekly&time=08:00&day_of_week=1", true)
+
+	err := handler.Create(c)
+	require.NoError(t, err)
+	require.NotNil(t, svc.lastCreate)
+	assert.Equal(t, "0 8 * * 1", svc.lastCreate.CronExpr)
+}
+
+func TestSchedulesHandler_Create_MonthlyComposesDayOfMonth(t *testing.T) {
+	svc := &mockScheduleService{}
+	handler := NewSchedulesHandler(svc)
+	c, _ := postScheduleForm(t, http.MethodPost, "/schedules", "type=monthly&time=09:00&day_of_month=15", true)
+
+	err := handler.Create(c)
+	require.NoError(t, err)
+	require.NotNil(t, svc.lastCreate)
+	assert.Equal(t, "0 9 15 * *", svc.lastCreate.CronExpr)
 }
 
 func TestSchedulesHandler_Create_Success_BrowserRedirect(t *testing.T) {
 	handler := NewSchedulesHandler(&mockScheduleService{})
-	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=weekly&cron_expr=0+8+*+*+1", false)
+	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=weekly&time=08:00&day_of_week=1", false)
 
 	err := handler.Create(c)
 	require.NoError(t, err)
@@ -313,21 +353,20 @@ func TestSchedulesHandler_Create_Success_BrowserRedirect(t *testing.T) {
 	assert.Equal(t, "/schedules", rec.Header().Get("Location"))
 }
 
-func TestSchedulesHandler_Create_InvalidCron(t *testing.T) {
-	svc := &mockScheduleService{createErr: scheduling.ErrInvalidCronExpr}
-	handler := NewSchedulesHandler(svc)
-	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&cron_expr=bogus", true)
+func TestSchedulesHandler_Create_InvalidTime(t *testing.T) {
+	handler := NewSchedulesHandler(&mockScheduleService{})
+	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&time=not-a-time", true)
 
 	err := handler.Create(c)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Invalid cron expression")
+	assert.Contains(t, rec.Body.String(), "Please select a valid time of day")
 }
 
 func TestSchedulesHandler_Create_AlreadyExists(t *testing.T) {
 	svc := &mockScheduleService{createErr: scheduling.ErrScheduleAlreadyExists}
 	handler := NewSchedulesHandler(svc)
-	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&cron_expr=0+9+*+*+*", true)
+	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=daily&time=09:00", true)
 
 	err := handler.Create(c)
 	require.NoError(t, err)
@@ -335,9 +374,8 @@ func TestSchedulesHandler_Create_AlreadyExists(t *testing.T) {
 }
 
 func TestSchedulesHandler_Create_InvalidType(t *testing.T) {
-	svc := &mockScheduleService{createErr: scheduling.ErrInvalidScheduleType}
-	handler := NewSchedulesHandler(svc)
-	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=bogus&cron_expr=0+9+*+*+*", true)
+	handler := NewSchedulesHandler(&mockScheduleService{})
+	c, rec := postScheduleForm(t, http.MethodPost, "/schedules", "type=bogus&time=09:00", true)
 
 	err := handler.Create(c)
 	require.NoError(t, err)
@@ -353,7 +391,7 @@ func TestSchedulesHandler_Update_Success(t *testing.T) {
 	}
 	handler := NewSchedulesHandler(svc)
 
-	c, rec := postScheduleForm(t, http.MethodPut, "/schedules/"+id.String(), "type=daily&cron_expr=0+10+*+*+*&format=concise", true)
+	c, rec := postScheduleForm(t, http.MethodPut, "/schedules/"+id.String(), "type=daily&time=10:00&format=concise", true)
 	c.SetParamNames("id")
 	c.SetParamValues(id.String())
 
@@ -361,6 +399,9 @@ func TestSchedulesHandler_Update_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "/schedules", rec.Header().Get("HX-Redirect"))
+
+	require.NotNil(t, svc.lastUpdate)
+	assert.Equal(t, "0 10 * * *", svc.lastUpdate.CronExpr)
 }
 
 func TestSchedulesHandler_Update_CrossTenantDenied(t *testing.T) {
@@ -370,7 +411,7 @@ func TestSchedulesHandler_Update_CrossTenantDenied(t *testing.T) {
 	}
 	handler := NewSchedulesHandler(svc)
 
-	c, rec := postScheduleForm(t, http.MethodPut, "/schedules/"+id.String(), "type=daily&cron_expr=0+10+*+*+*", true)
+	c, rec := postScheduleForm(t, http.MethodPut, "/schedules/"+id.String(), "type=daily&time=10:00", true)
 	c.SetParamNames("id")
 	c.SetParamValues(id.String())
 
