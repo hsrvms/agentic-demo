@@ -418,6 +418,122 @@ func eventTypeLabel(eventType string) string {
 	return label
 }
 
+// --- Invoice mappers ---
+
+// MapInvoiceItem converts a domain Invoice into an InvoiceItem view model.
+func MapInvoiceItem(inv *budget.Invoice) InvoiceItem {
+	return InvoiceItem{
+		ID:           inv.ID.String(),
+		PeriodLabel:  invoicePeriodLabel(inv.PeriodStart, inv.PeriodEnd),
+		Status:       string(inv.Status),
+		StatusLabel:  InvoiceStatusLabel(inv.Status),
+		StatusIntent: InvoiceStatusIntent(inv.Status),
+		TotalCostUSD: fmt.Sprintf("$%.2f", inv.TotalCostUSD),
+	}
+}
+
+// MapInvoiceList converts a paginated InvoicePage into an InvoiceListData
+// view model.
+func MapInvoiceList(result budget.InvoicePage) InvoiceListData {
+	items := make([]InvoiceItem, len(result.Invoices))
+	for i := range result.Invoices {
+		items[i] = MapInvoiceItem(&result.Invoices[i])
+	}
+	return InvoiceListData{
+		Invoices:   items,
+		TotalCount: result.TotalCount,
+		Page:       result.Page,
+		PageSize:   result.PageSize,
+	}
+}
+
+// MapInvoiceDetail converts a domain Invoice into an InvoiceDetailData view
+// model with a per-model line-item breakdown.
+func MapInvoiceDetail(inv *budget.Invoice) InvoiceDetailData {
+	lineItems := make([]InvoiceLineItem, len(inv.LineItems))
+	for i := range inv.LineItems {
+		li := &inv.LineItems[i]
+		lineItems[i] = InvoiceLineItem{
+			Model:            li.Model,
+			InputTokens:      FormatTokens(li.InputTokens),
+			OutputTokens:     FormatTokens(li.OutputTokens),
+			ToolCalls:        strconv.FormatInt(int64(li.ToolCalls), 10),
+			EmbeddingTokens:  FormatTokens(li.EmbeddingTokens),
+			ReportsGenerated: strconv.FormatInt(int64(li.ReportsGenerated), 10),
+			CostUSD:          fmt.Sprintf("$%.2f", li.CostUSD),
+		}
+	}
+	return InvoiceDetailData{
+		ID:           inv.ID.String(),
+		PeriodLabel:  invoicePeriodLabel(inv.PeriodStart, inv.PeriodEnd),
+		PeriodStart:  invoiceDate(inv.PeriodStart),
+		PeriodEnd:    invoiceDate(inv.PeriodEnd),
+		Status:       string(inv.Status),
+		StatusLabel:  InvoiceStatusLabel(inv.Status),
+		StatusIntent: InvoiceStatusIntent(inv.Status),
+		TotalCostUSD: fmt.Sprintf("$%.2f", inv.TotalCostUSD),
+		LineItems:    lineItems,
+	}
+}
+
+// InvoiceStatusLabel returns the display label for an invoice status.
+func InvoiceStatusLabel(s budget.InvoiceStatus) string {
+	switch s {
+	case budget.InvoiceDraft:
+		return "Draft"
+	case budget.InvoiceIssued:
+		return "Issued"
+	case budget.InvoicePaid:
+		return "Paid"
+	case budget.InvoiceOverdue:
+		return "Overdue"
+	default:
+		return string(s)
+	}
+}
+
+// InvoiceStatusIntent maps an invoice status to a design-system intent.
+// draft=muted, issued=info, paid=success, overdue=error.
+func InvoiceStatusIntent(s budget.InvoiceStatus) string {
+	switch s {
+	case budget.InvoiceIssued:
+		return "info"
+	case budget.InvoicePaid:
+		return "success"
+	case budget.InvoiceOverdue:
+		return "error"
+	case budget.InvoiceDraft:
+		return "muted"
+	default:
+		return "muted"
+	}
+}
+
+// invoicePeriodLabel renders an invoice billing period in a compact form,
+// e.g. "Jul 01 — Jul 31, 2025". Different years render both years.
+func invoicePeriodLabel(start, end time.Time) string {
+	if start.IsZero() || end.IsZero() {
+		return ""
+	}
+	if start.Year() == end.Year() {
+		return fmt.Sprintf("%s %02d — %s %02d, %d",
+			start.Month().String()[:3], start.Day(),
+			end.Month().String()[:3], end.Day(), end.Year())
+	}
+	return fmt.Sprintf("%s %02d, %d — %s %02d, %d",
+		start.Month().String()[:3], start.Day(), start.Year(),
+		end.Month().String()[:3], end.Day(), end.Year())
+}
+
+// invoiceDate renders a date as "Jan 02, 2006", or an empty string for a
+// zero time.
+func invoiceDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("Jan 02, 2006")
+}
+
 // --- Schedule mappers ---
 
 // MapScheduleItem converts a domain ReportSchedule into a ScheduleItem view

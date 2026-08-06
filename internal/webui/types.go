@@ -229,3 +229,48 @@ type UsageSummaryData struct {
 	CostFormatted string
 	Models        []UsageModelItem
 }
+
+// InvoiceItem is a single row in the invoices list table.
+type InvoiceItem struct {
+	ID           string
+	PeriodLabel  string
+	Status       string
+	StatusLabel  string
+	StatusIntent string // "muted", "info", "success", "error"
+	TotalCostUSD string
+}
+
+// InvoiceListData is the view model for the invoices list page.
+type InvoiceListData struct {
+	TenantName string
+	Invoices   []InvoiceItem
+	TotalCount int
+	Page       int
+	PageSize   int
+	HasMore    bool
+	NextPage   int
+}
+
+// InvoiceLineItem is a single per-model line on the invoice detail page.
+type InvoiceLineItem struct {
+	Model            string
+	InputTokens      string
+	OutputTokens     string
+	ToolCalls        string
+	EmbeddingTokens  string
+	ReportsGenerated string
+	CostUSD          string
+}
+
+// InvoiceDetailData is the view model for the invoice detail page.
+type InvoiceDetailData struct {
+	ID           string
+	PeriodLabel  string
+	PeriodStart  string
+	PeriodEnd    string
+	Status       string
+	StatusLabel  string
+	StatusIntent string
+	TotalCostUSD string
+	LineItems    []InvoiceLineItem
+}

@@ -553,3 +553,93 @@ func TestMapUsageEvents_EmbeddingAndMalformed(t *testing.T) {
 	assert.Equal(t, "unknown_type", items[1].TypeLabel)
 	assert.Equal(t, "unknown_type", items[1].Summary)
 }
+
+// --- Invoice mappers ---
+
+func TestMapInvoiceItem(t *testing.T) {
+	inv := &budget.Invoice{
+		ID:           uuid.New(),
+		TenantID:     "t1",
+		PeriodStart:  time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:    time.Date(2025, 7, 31, 0, 0, 0, 0, time.UTC),
+		TotalCostUSD: 42.50,
+		Status:       budget.InvoicePaid,
+	}
+	item := MapInvoiceItem(inv)
+	assert.Equal(t, inv.ID.String(), item.ID)
+	assert.Equal(t, "Jul 01 — Jul 31, 2025", item.PeriodLabel)
+	assert.Equal(t, "paid", item.Status)
+	assert.Equal(t, "Paid", item.StatusLabel)
+	assert.Equal(t, "success", item.StatusIntent)
+	assert.Equal(t, "$42.50", item.TotalCostUSD)
+}
+
+func TestMapInvoiceItem_DifferentYears(t *testing.T) {
+	inv := &budget.Invoice{
+		PeriodStart: time.Date(2024, 12, 20, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:   time.Date(2025, 1, 5, 0, 0, 0, 0, time.UTC),
+	}
+	item := MapInvoiceItem(inv)
+	assert.Equal(t, "Dec 20, 2024 — Jan 05, 2025", item.PeriodLabel)
+}
+
+func TestMapInvoiceItem_ZeroPeriod(t *testing.T) {
+	item := MapInvoiceItem(&budget.Invoice{})
+	assert.Equal(t, "", item.PeriodLabel)
+}
+
+func TestMapInvoiceList(t *testing.T) {
+	result := budget.InvoicePage{
+		Invoices: []budget.Invoice{
+			{ID: uuid.New(), Status: budget.InvoiceDraft},
+			{ID: uuid.New(), Status: budget.InvoiceOverdue},
+		},
+		TotalCount: 2,
+		Page:       1,
+		PageSize:   20,
+	}
+	data := MapInvoiceList(result)
+	assert.Equal(t, 2, data.TotalCount)
+	assert.Equal(t, 1, data.Page)
+	assert.Len(t, data.Invoices, 2)
+	assert.Equal(t, "muted", data.Invoices[0].StatusIntent)
+	assert.Equal(t, "error", data.Invoices[1].StatusIntent)
+}
+
+func TestMapInvoiceDetail(t *testing.T) {
+	inv := &budget.Invoice{
+		ID:           uuid.New(),
+		PeriodStart:  time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:    time.Date(2025, 7, 31, 0, 0, 0, 0, time.UTC),
+		TotalCostUSD: 30.00,
+		Status:       budget.InvoiceIssued,
+		LineItems: []budget.InvoiceLineItem{
+			{Model: "qwen-max", InputTokens: 1000, OutputTokens: 500, ToolCalls: 3, EmbeddingTokens: 2000, ReportsGenerated: 5, CostUSD: 30.00},
+		},
+	}
+	data := MapInvoiceDetail(inv)
+	assert.Equal(t, "Jul 01, 2025", data.PeriodStart)
+	assert.Equal(t, "Jul 31, 2025", data.PeriodEnd)
+	assert.Equal(t, "Issued", data.StatusLabel)
+	assert.Equal(t, "info", data.StatusIntent)
+	assert.Equal(t, "$30.00", data.TotalCostUSD)
+	require.Len(t, data.LineItems, 1)
+	li := data.LineItems[0]
+	assert.Equal(t, "qwen-max", li.Model)
+	assert.Equal(t, "1.0K", li.InputTokens)
+	assert.Equal(t, "500", li.OutputTokens)
+	assert.Equal(t, "3", li.ToolCalls)
+	assert.Equal(t, "2.0K", li.EmbeddingTokens)
+	assert.Equal(t, "5", li.ReportsGenerated)
+	assert.Equal(t, "$30.00", li.CostUSD)
+}
+
+func TestMapInvoiceDetail_NoLineItems(t *testing.T) {
+	data := MapInvoiceDetail(&budget.Invoice{})
+	assert.Empty(t, data.LineItems)
+}
+
+func TestInvoiceStatusLabel_Default(t *testing.T) {
+	assert.Equal(t, "custom", InvoiceStatusLabel(budget.InvoiceStatus("custom")))
+	assert.Equal(t, "muted", InvoiceStatusIntent(budget.InvoiceStatus("custom")))
+}
