@@ -59,16 +59,16 @@ type UsageEventPage struct {
 
 // CurrentUsage is a real-time usage snapshot from Redis for the current month.
 type CurrentUsage struct {
-	TenantID       string
-	PeriodStart    time.Time
-	PeriodEnd      time.Time
-	TotalCostUSD   float64
-	TotalInputTokens  int64
-	TotalOutputTokens int64
-	TotalToolCalls    int64
+	TenantID             string
+	PeriodStart          time.Time
+	PeriodEnd            time.Time
+	TotalCostUSD         float64
+	TotalInputTokens     int64
+	TotalOutputTokens    int64
+	TotalToolCalls       int64
 	TotalEmbeddingTokens int64
-	ReportsGenerated  int64
-	ByModel        []ModelUsage
+	ReportsGenerated     int64
+	ByModel              []ModelUsage
 }
 
 // ModelUsage is a per-model breakdown within CurrentUsage.

@@ -67,9 +67,9 @@ func TestService_GetSummary_InvalidDateRange(t *testing.T) {
 
 func TestService_GetCurrentUsage(t *testing.T) {
 	expected := &CurrentUsage{
-		TenantID:      "tenant-1",
-		TotalCostUSD:  0.005,
-		ByModel:       []ModelUsage{{Model: "qwen-max", InputTokens: 100}},
+		TenantID:     "tenant-1",
+		TotalCostUSD: 0.005,
+		ByModel:      []ModelUsage{{Model: "qwen-max", InputTokens: 100}},
 	}
 	reader := &mockReader{currentUsage: expected}
 	svc := NewService(&mockRepository{}, reader)

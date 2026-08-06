@@ -53,11 +53,11 @@ func TestService_Create_FileUploadPersistsToObjectStore(t *testing.T) {
 
 	cfg := json.RawMessage(`{"filename": "notes.txt", "size": "5"}`)
 	ds, err := svc.Create(ctx, &CreateDataSourceParams{
-		TenantID:    "tenant-1",
-		SourceType:  SourceTypeFileUpload,
-		Name:        "Notes",
-		Config:      cfg,
-		File:        []byte("hello"),
+		TenantID:   "tenant-1",
+		SourceType: SourceTypeFileUpload,
+		Name:       "Notes",
+		Config:     cfg,
+		File:       []byte("hello"),
 	})
 	require.NoError(t, err)
 

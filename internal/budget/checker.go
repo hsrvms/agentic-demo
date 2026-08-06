@@ -6,8 +6,8 @@ import (
 	"log"
 	"math"
 
-	"github.com/agentic-demo/platform/internal/usage"
 	"github.com/agentic-demo/platform/internal/domain"
+	"github.com/agentic-demo/platform/internal/usage"
 )
 
 // BudgetChecker checks whether an LLM call would exceed the tenant's budget.

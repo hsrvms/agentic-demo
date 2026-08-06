@@ -80,5 +80,3 @@ func (h *DashboardHandler) dashboardPage(c echo.Context) error {
 	flashes := GetFlashMessages(c.Request().Context())
 	return Render(c, http.StatusOK, webpages.Dashboard(data, flashes))
 }
-
-

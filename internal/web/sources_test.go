@@ -739,4 +739,3 @@ func TestExtractConfigURL(t *testing.T) {
 	assert.Equal(t, "", extractConfigURL(json.RawMessage(`{}`)))
 	assert.Equal(t, "", extractConfigURL(json.RawMessage(`invalid`)))
 }
-
