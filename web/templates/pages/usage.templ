@@ -1,0 +1,204 @@
+package pages
+
+import "fmt"
+
+import "github.com/agentic-demo/platform/internal/webui"
+import "github.com/agentic-demo/platform/web/templates/layouts"
+
+templ Usage(data webui.UsageData, flashes []webui.Flash) {
+	@layouts.Base("Usage", flashes) {
+		<div class="space-y-6">
+			<div>
+				<h1 class="text-3xl font-bold tracking-tight">Usage</h1>
+				if data.TenantName != "" {
+					<p class="text-content-secondary mt-1">{ data.TenantName }</p>
+				}
+			</div>
+
+			// Current-month stat cards.
+			<section aria-label="Current month usage">
+				<div class="flex items-center justify-between mb-4">
+					<h2 class="text-xl font-semibold text-content">Current Month</h2>
+					if data.PeriodLabel != "" {
+						<span class="text-sm text-content-muted">{ data.PeriodLabel }</span>
+					}
+				</div>
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+					for _, stat := range data.Stats {
+						@UsageStatCard(stat)
+					}
+				</div>
+			</section>
+
+			// Per-model breakdown table.
+			<section aria-label="Per-model breakdown" class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+				<div class="px-4 py-3 border-b border-border">
+					<h3 class="text-lg font-medium text-content">Per-Model Breakdown</h3>
+				</div>
+				if len(data.Models) == 0 {
+					<p class="px-4 py-8 text-center text-sm text-content-muted">No usage recorded for the current month yet.</p>
+				} else {
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Model</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Input Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Output Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Tool Calls</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Embedding Tokens</th>
+									<th class="text-right py-3 px-4 font-medium text-content-secondary">Cost</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, m := range data.Models {
+									@UsageModelRow(m)
+								}
+							</tbody>
+						</table>
+					</div>
+				}
+			</section>
+
+			// Historical summary by date range.
+			<section aria-label="Historical summary" class="bg-surface-card border border-border rounded-lg shadow-sm p-6">
+				<h3 class="text-lg font-medium text-content mb-4">Historical Summary</h3>
+				<form
+					hx-get="/usage/summary"
+					hx-target="#usage-summary"
+					hx-swap="innerHTML"
+					hx-indicator="#usage-summary-spinner"
+					class="flex flex-wrap items-end gap-4"
+				>
+					<div class="space-y-1">
+						<label for="usage-from" class="block text-sm font-medium text-content">From</label>
+						<input
+							id="usage-from"
+							name="from"
+							type="date"
+							class="block rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+						/>
+					</div>
+					<div class="space-y-1">
+						<label for="usage-to" class="block text-sm font-medium text-content">To</label>
+						<input
+							id="usage-to"
+							name="to"
+							type="date"
+							class="block rounded-lg border border-border bg-surface-card px-3 py-2 text-sm text-content focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-colors"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-on shadow-sm hover:bg-primary-hover focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						<span class="htmx-indicator:hidden">Apply</span>
+						<span class="htmx-indicator:flex hidden items-center gap-2">
+							<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+							</svg>
+							Loading…
+						</span>
+					</button>
+				</form>
+				<div id="usage-summary" class="mt-6">
+					<p class="text-sm text-content-muted">Select a date range to view the historical summary and per-model costs.</p>
+				</div>
+			</section>
+
+			// Paginated event log with HTMX infinite scroll.
+			<section aria-label="Event log" class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden">
+				<div class="px-4 py-3 border-b border-border">
+					<h3 class="text-lg font-medium text-content">Event Log</h3>
+				</div>
+				if len(data.Events) == 0 {
+					<p class="px-4 py-8 text-center text-sm text-content-muted">No usage events recorded yet.</p>
+				} else {
+					<div class="overflow-x-auto">
+						<table class="w-full text-sm">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Type</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Details</th>
+									<th class="text-left py-3 px-4 font-medium text-content-secondary">Timestamp</th>
+								</tr>
+							</thead>
+							<tbody id="usage-events-body">
+								for _, e := range data.Events {
+									@UsageEventRow(e)
+								}
+							</tbody>
+						</table>
+					</div>
+
+					if data.HasMoreEvents {
+						<div
+							id="usage-events-pagination"
+							hx-get={ fmt.Sprintf("/usage/events?page=%d", data.NextEventPage) }
+							hx-trigger="revealed"
+							hx-target="#usage-events-body"
+							hx-swap="beforeend"
+						>
+							<div class="flex justify-center py-4">
+								<div class="htmx-indicator flex items-center gap-2 text-sm text-content-muted">
+									<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+									</svg>
+									Loading more…
+								</div>
+							</div>
+						</div>
+					}
+				}
+			</section>
+		</div>
+	}
+}
+
+// UsageStatCard renders a single stat card with an intent-colored top accent.
+templ UsageStatCard(stat webui.UsageStatData) {
+	<div class="bg-surface-card border border-border rounded-lg shadow-sm p-6 relative overflow-hidden">
+		<div class={ fmt.Sprintf("absolute inset-x-0 top-0 h-1 %s", usageStatAccent(stat.Intent)) }></div>
+		<p class="text-sm font-medium text-content-secondary">{ stat.Label }</p>
+		<p class="text-2xl font-bold text-content mt-1">{ stat.Value }</p>
+	</div>
+}
+
+// usageStatAccent maps a stat intent to its top-accent background class.
+func usageStatAccent(intent string) string {
+	switch intent {
+	case "info":
+		return "bg-intent-info"
+	case "warning":
+		return "bg-intent-warning"
+	case "success":
+		return "bg-intent-success"
+	default:
+		return "bg-primary"
+	}
+}
+
+// UsageModelRow renders a single per-model usage row.
+templ UsageModelRow(m webui.UsageModelItem) {
+	<tr class="border-b border-border hover:bg-surface-page transition-colors">
+		<td class="py-3 px-4 font-medium text-content">{ m.Model }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ m.InputTokens }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ m.OutputTokens }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ m.ToolCalls }</td>
+		<td class="py-3 px-4 text-right text-content-secondary">{ m.EmbeddingTokens }</td>
+		<td class="py-3 px-4 text-right font-medium text-content">{ m.CostUSD }</td>
+	</tr>
+}
+
+// UsageEventRow renders a single event log row.
+templ UsageEventRow(e webui.UsageEventItem) {
+	<tr class="border-b border-border hover:bg-surface-page transition-colors">
+		<td class="py-3 px-4">
+			@TypeBadge(e.TypeLabel, e.TypeIntent)
+		</td>
+		<td class="py-3 px-4 text-content-secondary">{ e.Summary }</td>
+		<td class="py-3 px-4 text-content-muted text-xs whitespace-nowrap">{ e.CreatedAt }</td>
+	</tr>
+}

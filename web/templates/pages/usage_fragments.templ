@@ -1,0 +1,55 @@
+package pages
+
+import "github.com/agentic-demo/platform/internal/webui"
+
+// UsageSummaryFragment renders the per-model cost table for the selected date
+// range. It is swapped into the page by the HTMX date-range form.
+templ UsageSummaryFragment(data webui.UsageSummaryData) {
+	if !data.HasData {
+		<div class="rounded-lg border border-border p-6 text-center">
+			<p class="text-sm text-content-muted">No usage recorded for the selected range.</p>
+		</div>
+	} else {
+		<div>
+			<p class="text-sm text-content-secondary mb-3">
+				if data.FromLabel != "" {
+					{ data.FromLabel }
+				}
+				—
+				if data.ToLabel != "" {
+					{ data.ToLabel }
+				}
+				· Total:
+				<span class="font-semibold text-content">{ data.CostFormatted }</span>
+			</p>
+			<div class="overflow-x-auto rounded-lg border border-border">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-border bg-surface-page">
+							<th class="text-left py-2.5 px-4 font-medium text-content-secondary">Model</th>
+							<th class="text-right py-2.5 px-4 font-medium text-content-secondary">Input Tokens</th>
+							<th class="text-right py-2.5 px-4 font-medium text-content-secondary">Output Tokens</th>
+							<th class="text-right py-2.5 px-4 font-medium text-content-secondary">Tool Calls</th>
+							<th class="text-right py-2.5 px-4 font-medium text-content-secondary">Embedding Tokens</th>
+							<th class="text-right py-2.5 px-4 font-medium text-content-secondary">Cost</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, m := range data.Models {
+							@UsageModelRow(m)
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+}
+
+// UsageEventRowsFragment renders the next page of event rows for HTMX
+// infinite-scroll pagination. The page's sentinel element swaps these rows
+// into the event table body.
+templ UsageEventRowsFragment(events []webui.UsageEventItem) {
+	for _, e := range events {
+		@UsageEventRow(e)
+	}
+}

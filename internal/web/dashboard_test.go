@@ -24,19 +24,38 @@ import (
 
 type mockUsageService struct {
 	currentUsage *usage.CurrentUsage
+	summary      *usage.UsageSummary
+	events       *usage.UsageEventPage
 	err          error
+	summaryErr   error
+	eventsErr    error
+	lastFrom     string
+	lastTo       string
+	lastPage     int
 }
 
-func (m *mockUsageService) GetSummary(_ context.Context, _, _, _ string) (*usage.UsageSummary, error) {
-	return nil, nil
+func (m *mockUsageService) GetSummary(_ context.Context, _, from, to string) (*usage.UsageSummary, error) {
+	m.lastFrom = from
+	m.lastTo = to
+	if m.summaryErr != nil {
+		return nil, m.summaryErr
+	}
+	return m.summary, nil
 }
 
 func (m *mockUsageService) GetCurrentUsage(_ context.Context, _ string) (*usage.CurrentUsage, error) {
-	return m.currentUsage, m.err
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.currentUsage, nil
 }
 
-func (m *mockUsageService) ListEvents(_ context.Context, _ string, _, _ int) (*usage.UsageEventPage, error) {
-	return nil, nil
+func (m *mockUsageService) ListEvents(_ context.Context, _ string, page, _ int) (*usage.UsageEventPage, error) {
+	m.lastPage = page
+	if m.eventsErr != nil {
+		return nil, m.eventsErr
+	}
+	return m.events, nil
 }
 
 type mockReportService struct {
@@ -63,19 +82,19 @@ func (m *mockReportService) Delete(_ context.Context, _ uuid.UUID) error {
 }
 
 type mockSourceService struct {
-	page         sources.DataSourcePage
-	err          error
-	detailSource *sources.DataSource
-	detailErr    error
-	createResult    sources.DataSource
-	createErr       error
-	createdParams   *sources.CreateDataSourceParams
-	updateResult sources.DataSource
-	updateErr    error
-	deleteErr    error
-	testResult   sources.ConnectionTestResult
-	testErr      error
-	syncErr      error
+	page          sources.DataSourcePage
+	err           error
+	detailSource  *sources.DataSource
+	detailErr     error
+	createResult  sources.DataSource
+	createErr     error
+	createdParams *sources.CreateDataSourceParams
+	updateResult  sources.DataSource
+	updateErr     error
+	deleteErr     error
+	testResult    sources.ConnectionTestResult
+	testErr       error
+	syncErr       error
 }
 
 func (m *mockSourceService) Create(_ context.Context, params *sources.CreateDataSourceParams) (sources.DataSource, error) {
@@ -192,8 +211,8 @@ func TestDashboardHandler_AssemblesData(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, "$12.34")
 	assert.Contains(t, body, "8.0K tokens used")
-	assert.Contains(t, body, "7")  // reports count
-	assert.Contains(t, body, "2")  // active sources count
+	assert.Contains(t, body, "7") // reports count
+	assert.Contains(t, body, "2") // active sources count
 	assert.Contains(t, body, "62%")
 }
 
@@ -286,5 +305,3 @@ func TestDashboardHandler_FlashesPassedToTemplate(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, "Welcome!")
 }
-
-
