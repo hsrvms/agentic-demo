@@ -1,5 +1,6 @@
 .PHONY: dev dev-server dev-worker build build-server build-worker build-all run run-server run-worker \
         test test-fails test-cover test-short lint lint-fix generate tidy vet clean \
+        fmt-check mod-verify generate-check ci \
         migrate-up db-ping db-psql db-reset
 
 # ── Environment ────────────────────────────────────────────────────
@@ -94,6 +95,34 @@ tidy:
 # ── Type Check ──────────────────────────────────────────────────────
 vet:
 	go vet ./...
+
+# ── CI ───────────────────────────────────────────────────────────────
+fmt-check:
+	@files="$$(gofmt -s -l $$(git ls-files -- '*.go'))"; \
+	if [ -n "$$files" ]; then \
+		echo "Go files need formatting:"; \
+		echo "$$files"; \
+		exit 1; \
+	fi
+
+mod-verify:
+	go mod verify
+	@go mod tidy
+	@if ! git diff --quiet -- go.mod go.sum; then \
+		echo "error: go.mod/go.sum are not tidy — run: make tidy"; \
+		exit 1; \
+	fi
+
+generate-check:
+	@templ generate
+	@sqlc generate
+	@if [ -n "$$(git status --porcelain -- internal/db web/templates)" ]; then \
+		echo "error: generated code is out of date — run: make generate"; \
+		git status --porcelain -- internal/db web/templates; \
+		exit 1; \
+	fi
+
+ci: fmt-check mod-verify generate-check lint test build-all
 
 # ── Database Migrations ─────────────────────────────────────────────
 migrate-up:
