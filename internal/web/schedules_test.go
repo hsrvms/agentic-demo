@@ -136,6 +136,9 @@ func TestSchedulesHandler_List_RendersTable(t *testing.T) {
 	assert.Contains(t, body, `role="switch"`)
 	assert.Contains(t, body, `translate-x-6`)
 	assert.Contains(t, body, `translate-x-1`)
+	// The enabled/disabled state is labelled so color is never the sole indicator.
+	assert.Contains(t, body, ">Enabled</span>")
+	assert.Contains(t, body, ">Disabled</span>")
 	// Edit and delete actions.
 	assert.Contains(t, body, "/schedules/"+id.String()+"/edit")
 	assert.Contains(t, body, `hx-delete="/schedules/`+id.String()+`"`)
@@ -503,6 +506,9 @@ func TestSchedulesHandler_Toggle_ReturnsUpdatedRow(t *testing.T) {
 	// Toggled to disabled: knob at off position, aria-checked=false.
 	assert.Contains(t, body, `aria-checked="false"`)
 	assert.Contains(t, body, `translate-x-1`)
+	// A clear text label communicates the disabled state.
+	assert.Contains(t, body, ">Disabled</span>")
+	assert.NotContains(t, body, ">Enabled</span>")
 	// Row fragment only, no page shell.
 	assert.NotContains(t, body, "<html")
 }

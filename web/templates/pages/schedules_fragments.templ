@@ -57,28 +57,45 @@ templ ScheduleRow(s webui.ScheduleItem, csrfToken string) {
 	</tr>
 }
 
-// ScheduleToggle renders an accessible on/off switch that toggles the
-// schedule's enabled state via HTMX and swaps the parent row.
+// ScheduleToggle renders an accessible on/off switch paired with a text label
+// so the schedule's enabled state is unambiguous (color is never the sole
+// indicator). It toggles via HTMX and swaps the parent row.
 templ ScheduleToggle(s webui.ScheduleItem, csrfToken string) {
-	<button
-		hx-post={ "/schedules/" + s.ID + "/toggle" }
-		hx-target="closest tr"
-		hx-swap="outerHTML"
-		hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
-		role="switch"
-		aria-checked={ fmt.Sprintf("%v", s.Enabled) }
-		aria-label={ "Toggle " + s.TypeLabel + " schedule" }
-		class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-		if s.Enabled {
-			class="bg-intent-success"
-		} else {
-			class="bg-border-strong"
-		}
-	>
+	<div class="flex items-center gap-2">
+		<button
+			hx-post={ "/schedules/" + s.ID + "/toggle" }
+			hx-target="closest tr"
+			hx-swap="outerHTML"
+			hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
+			role="switch"
+			aria-checked={ fmt.Sprintf("%v", s.Enabled) }
+			aria-label={ "Toggle " + s.TypeLabel + " schedule" }
+			class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+			if s.Enabled {
+				class="bg-intent-success"
+			} else {
+				class="bg-border-strong"
+			}
+		>
+			<span
+				class={ fmt.Sprintf("inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform %s", scheduleKnob(s.Enabled)) }
+			></span>
+		</button>
 		<span
-			class={ fmt.Sprintf("inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform %s", scheduleKnob(s.Enabled)) }
-		></span>
-	</button>
+			class="text-xs font-medium"
+			if s.Enabled {
+				class="text-intent-success"
+			} else {
+				class="text-content-muted"
+			}
+		>
+			if s.Enabled {
+				<span>Enabled</span>
+			} else {
+				<span>Disabled</span>
+			}
+		</span>
+	</div>
 }
 
 // scheduleKnob returns the Tailwind transform class for the toggle knob position.
