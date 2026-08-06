@@ -130,16 +130,21 @@ func (m *mockSourceService) Sync(_ context.Context, _ uuid.UUID) error {
 }
 
 type mockBudgetService struct {
-	status *budget.BudgetStatus
-	err    error
+	status          *budget.BudgetStatus
+	err             error
+	setErr          error
+	lastBudget      float64
+	setBudgetCalled bool
 }
 
 func (m *mockBudgetService) GetBudgetStatus(_ context.Context, _ domain.TenantID) (*budget.BudgetStatus, error) {
 	return m.status, m.err
 }
 
-func (m *mockBudgetService) SetMonthlyBudget(_ context.Context, _ domain.TenantID, _ float64) error {
-	return nil
+func (m *mockBudgetService) SetMonthlyBudget(_ context.Context, _ domain.TenantID, b float64) error {
+	m.setBudgetCalled = true
+	m.lastBudget = b
+	return m.setErr
 }
 
 func (m *mockBudgetService) ListInvoices(_ context.Context, _ domain.TenantID, _, _ int) (budget.InvoicePage, error) {

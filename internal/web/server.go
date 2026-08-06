@@ -24,6 +24,7 @@ type Server struct {
 	schedulesHandler *SchedulesHandler
 	usageHandler     *UsageHandler
 	invoicesHandler  *InvoicesHandler
+	settingsHandler  *SettingsHandler
 	authService      auth.AuthService
 	tenantService    tenant.TenantService
 	secureCookies    bool
@@ -83,6 +84,13 @@ func WithUsage(usageService usage.UsageService) ServerOption {
 func WithInvoices(budgetService budget.BudgetService) ServerOption {
 	return func(s *Server) {
 		s.invoicesHandler = NewInvoicesHandler(budgetService)
+	}
+}
+
+// WithSettings wires the tenant settings handler.
+func WithSettings(tenantService tenant.TenantService, budgetService budget.BudgetService) ServerOption {
+	return func(s *Server) {
+		s.settingsHandler = NewSettingsHandler(tenantService, budgetService)
 	}
 }
 
@@ -155,6 +163,11 @@ func (s *Server) Register(e *echo.Group) {
 	// Invoice browsing routes.
 	if s.invoicesHandler != nil {
 		s.invoicesHandler.Register(authGroup)
+	}
+
+	// Tenant settings routes.
+	if s.settingsHandler != nil {
+		s.settingsHandler.Register(authGroup)
 	}
 }
 

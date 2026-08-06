@@ -274,3 +274,21 @@ type InvoiceDetailData struct {
 	TotalCostUSD string
 	LineItems    []InvoiceLineItem
 }
+
+// SettingsData is the view model for the settings page.
+type SettingsData struct {
+	TenantName         string
+	TenantID           string
+	TenantStatus       string
+	TenantStatusLabel  string
+	TenantStatusIntent string // "success", "warning", "error"
+	CreatedAt          string
+	IsAdmin            bool
+	MonthlyBudget      string
+	MTDCost            string
+	Remaining          string
+	PercentUsed        float64
+	BudgetIntent       string // "success", "warning", "error"
+	BudgetExceeded     bool
+	CSRFToken          string
+}

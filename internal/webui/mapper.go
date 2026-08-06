@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agentic-demo/platform/internal/budget"
+	"github.com/agentic-demo/platform/internal/domain"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/sources"
@@ -840,6 +841,8 @@ func SourceTypeOptions() []SourceTypeOption {
 //	green  (< 80%)  → "success"
 //	yellow (80–95%) → "warning"
 //	red    (> 95%)  → "error"
+//
+// BudgetIntent returns the semantic intent for a budget usage percentage.
 func BudgetIntent(percent float64) string {
 	switch {
 	case percent > 95:
@@ -848,6 +851,69 @@ func BudgetIntent(percent float64) string {
 		return "warning"
 	default:
 		return "success"
+	}
+}
+
+// MapSettings assembles a SettingsData view model from the current tenant and
+// its live budget status. tenant is required; budgetStatus is optional (nil)
+// and yields zero-value budget fields.
+func MapSettings(tenant *domain.Tenant, budgetStatus *budget.BudgetStatus) SettingsData {
+	data := SettingsData{
+		TenantName:         tenant.Name,
+		TenantID:           string(tenant.ID),
+		TenantStatus:       string(tenant.Status),
+		TenantStatusLabel:  tenantStatusLabel(tenant.Status),
+		TenantStatusIntent: intentForTenantStatus(tenant.Status),
+		CreatedAt:          FormatDate(tenant.CreatedAt),
+		BudgetIntent:       "success",
+	}
+
+	if budgetStatus != nil {
+		data.MonthlyBudget = formatUSD(budgetStatus.MonthlyBudget)
+		data.MTDCost = formatUSD(budgetStatus.MonthToDateCost)
+		data.Remaining = formatUSD(budgetStatus.RemainingBudget)
+		data.PercentUsed = budgetStatus.PercentUsed
+		data.BudgetIntent = BudgetIntent(budgetStatus.PercentUsed)
+		data.BudgetExceeded = budgetStatus.IsExceeded
+	} else {
+		data.MonthlyBudget = "$0.00"
+		data.MTDCost = "$0.00"
+		data.Remaining = "$0.00"
+	}
+
+	return data
+}
+
+// formatUSD renders a dollar amount like "$250.00".
+func formatUSD(v float64) string {
+	return fmt.Sprintf("$%.2f", v)
+}
+
+// tenantStatusLabel maps a tenant lifecycle status to a human label.
+func tenantStatusLabel(s domain.TenantStatus) string {
+	switch s {
+	case domain.TenantActive:
+		return "Active"
+	case domain.TenantSuspended:
+		return "Suspended"
+	case domain.TenantDeleted:
+		return "Deleted"
+	default:
+		return string(s)
+	}
+}
+
+// intentForTenantStatus maps a tenant status to a semantic intent.
+func intentForTenantStatus(s domain.TenantStatus) string {
+	switch s {
+	case domain.TenantActive:
+		return "success"
+	case domain.TenantSuspended:
+		return "warning"
+	case domain.TenantDeleted:
+		return "error"
+	default:
+		return "muted"
 	}
 }
 
