@@ -136,9 +136,10 @@ func TestSchedulesHandler_List_RendersTable(t *testing.T) {
 	assert.Contains(t, body, `role="switch"`)
 	assert.Contains(t, body, `translate-x-6`)
 	assert.Contains(t, body, `translate-x-1`)
-	// The enabled/disabled state is labelled so color is never the sole indicator.
-	assert.Contains(t, body, ">Enabled</span>")
-	assert.Contains(t, body, ">Disabled</span>")
+	// The switch background color reflects state (green enabled, gray disabled)
+	// in a single class attribute so the color class is actually applied.
+	assert.Contains(t, body, `bg-intent-success`)
+	assert.Contains(t, body, `bg-border-strong`)
 	// Edit and delete actions.
 	assert.Contains(t, body, "/schedules/"+id.String()+"/edit")
 	assert.Contains(t, body, `hx-delete="/schedules/`+id.String()+`"`)
@@ -503,12 +504,11 @@ func TestSchedulesHandler_Toggle_ReturnsUpdatedRow(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	body := rec.Body.String()
-	// Toggled to disabled: knob at off position, aria-checked=false.
+	// Toggled to disabled: knob at off position, aria-checked=false, gray background.
 	assert.Contains(t, body, `aria-checked="false"`)
 	assert.Contains(t, body, `translate-x-1`)
-	// A clear text label communicates the disabled state.
-	assert.Contains(t, body, ">Disabled</span>")
-	assert.NotContains(t, body, ">Enabled</span>")
+	assert.Contains(t, body, `bg-border-strong`)
+	assert.NotContains(t, body, `bg-intent-success`)
 	// Row fragment only, no page shell.
 	assert.NotContains(t, body, "<html")
 }
