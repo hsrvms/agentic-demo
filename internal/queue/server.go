@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -19,6 +21,7 @@ type ServerConfig struct {
 	Concurrency int
 	Queues      map[string]int
 	MaxRetry    int
+	Logger      *slog.Logger
 }
 
 // WorkerServer wraps asynq.Server with lifecycle management.
@@ -46,6 +49,11 @@ func NewWorkerServer(cfg ServerConfig, deps *HandlerDeps) *WorkerServer {
 		redisOpt = asynq.RedisClientOpt{Addr: cfg.RedisAddr}
 	}
 
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -54,6 +62,12 @@ func NewWorkerServer(cfg ServerConfig, deps *HandlerDeps) *WorkerServer {
 			RetryDelayFunc: func(n int, err error, t *asynq.Task) time.Duration {
 				return time.Duration(n) * 30 * time.Second
 			},
+			ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
+				logger.Error("task processing failed",
+					"task_type", task.Type(),
+					"error", err,
+				)
+			}),
 		},
 	)
 
