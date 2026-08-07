@@ -17,6 +17,10 @@ type Repository interface {
 	ListByTenant(ctx context.Context, params *db.ListReportsByTenantParams) ([]db.Report, error)
 	CountByTenant(ctx context.Context, tenantID string) (int32, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+
+	CreateGenerationJob(ctx context.Context, params *db.CreateGenerationJobParams) (db.ReportGenerationJob, error)
+	ListGenerationJobsByTenant(ctx context.Context, params *db.ListGenerationJobsByTenantParams) ([]db.ReportGenerationJob, error)
+	UpdateGenerationJob(ctx context.Context, params *db.UpdateGenerationJobParams) error
 }
 
 // pgRepository wraps sqlc-generated queries.
@@ -67,6 +71,29 @@ func (r *pgRepository) CountByTenant(ctx context.Context, tenantID string) (int3
 func (r *pgRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := r.queries.DeleteReport(ctx, id); err != nil {
 		return fmt.Errorf("delete report: %w", err)
+	}
+	return nil
+}
+
+func (r *pgRepository) CreateGenerationJob(ctx context.Context, params *db.CreateGenerationJobParams) (db.ReportGenerationJob, error) {
+	row, err := r.queries.CreateGenerationJob(ctx, *params)
+	if err != nil {
+		return db.ReportGenerationJob{}, fmt.Errorf("create generation job: %w", err)
+	}
+	return row, nil
+}
+
+func (r *pgRepository) ListGenerationJobsByTenant(ctx context.Context, params *db.ListGenerationJobsByTenantParams) ([]db.ReportGenerationJob, error) {
+	rows, err := r.queries.ListGenerationJobsByTenant(ctx, *params)
+	if err != nil {
+		return nil, fmt.Errorf("list generation jobs: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *pgRepository) UpdateGenerationJob(ctx context.Context, params *db.UpdateGenerationJobParams) error {
+	if err := r.queries.UpdateGenerationJob(ctx, *params); err != nil {
+		return fmt.Errorf("update generation job: %w", err)
 	}
 	return nil
 }

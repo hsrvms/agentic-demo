@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -20,19 +21,23 @@ const reportsPageSize = 20
 
 // ReportsHandler serves the report browsing pages and on-demand generation.
 type ReportsHandler struct {
-	service reports.ReportService
-	queue   queue.JobQueue
+	service   reports.ReportService
+	queue     queue.JobQueue
+	inspector queue.JobInspector
 }
 
 // NewReportsHandler creates a ReportsHandler. The JobQueue is used to
-// enqueue on-demand report generation jobs.
-func NewReportsHandler(service reports.ReportService, q queue.JobQueue) *ReportsHandler {
-	return &ReportsHandler{service: service, queue: q}
+// enqueue on-demand report generation jobs; the JobInspector reports their
+// live status for the activity panel. A nil inspector degrades the panel to
+// the recorded DB statuses.
+func NewReportsHandler(service reports.ReportService, q queue.JobQueue, inspector queue.JobInspector) *ReportsHandler {
+	return &ReportsHandler{service: service, queue: q, inspector: inspector}
 }
 
 // Register mounts report routes on the authenticated web group.
 func (h *ReportsHandler) Register(g *echo.Group) {
 	g.GET("/reports", h.List)
+	g.GET("/reports/activity", h.Activity)
 	g.GET("/reports/:id", h.Detail)
 	g.POST("/reports/generate", h.Generate)
 }
@@ -65,8 +70,43 @@ func (h *ReportsHandler) List(c echo.Context) error {
 		CSRFToken:   GetCSRFToken(ctx),
 		TypeOptions: webui.ReportTypeOptions(),
 	}
+	activity := h.generationActivity(ctx, tenantID)
 	flashes := GetFlashMessages(ctx)
-	return Render(c, http.StatusOK, webpages.ReportsList(data, genForm, flashes))
+	return Render(c, http.StatusOK, webpages.ReportsList(data, genForm, flashes, activity))
+}
+
+// Activity handles GET /reports/activity. It renders the generation activity
+// panel alone for HTMX polling.
+func (h *ReportsHandler) Activity(c echo.Context) error {
+	ctx := c.Request().Context()
+	tenantID := string(auth.GetTenantID(ctx))
+	return Render(c, http.StatusOK, webpages.GenerationActivityFragment(h.generationActivity(ctx, tenantID)))
+}
+
+// generationActivity loads the tenant's recent generation jobs and merges
+// their live queue state (when findable) with the recorded DB status. A
+// queue or tracking failure degrades gracefully to the recorded statuses.
+func (h *ReportsHandler) generationActivity(ctx context.Context, tenantID string) webui.GenerationActivityData {
+	jobs, err := h.service.ListGenerationJobs(ctx, tenantID, 5)
+	if err != nil {
+		log.Printf("reports activity error: %v", err)
+		return webui.GenerationActivityData{}
+	}
+
+	states := make(map[string]queue.JobState, len(jobs))
+	if h.inspector != nil {
+		for i := range jobs {
+			state, err := h.inspector.GetJobState(ctx, jobs[i].TaskID)
+			if err != nil {
+				if !errors.Is(err, queue.ErrJobNotFound) {
+					log.Printf("reports activity inspect error: %v", err)
+				}
+				continue
+			}
+			states[jobs[i].TaskID] = state
+		}
+	}
+	return webui.MapGenerationActivity(jobs, states)
 }
 
 // Generate handles POST /reports/generate. It validates the form input and
@@ -103,13 +143,20 @@ func (h *ReportsHandler) Generate(c echo.Context) error {
 		return h.generateError(c, "Please select a valid report type")
 	}
 
-	if _, err := h.queue.Enqueue(ctx, job); err != nil {
+	result, err := h.queue.Enqueue(ctx, job)
+	if err != nil {
 		log.Printf("reports generate enqueue error: %v", err)
 		return h.generateError(c, "Failed to start report generation")
 	}
 
+	// Retain the enqueued task ID so the activity panel can track the job.
+	// Tracking is best-effort: the job is already on the queue.
+	if err := h.service.TrackGenerationJob(ctx, tenantID, result.ID, payload.ReportType, focus); err != nil {
+		log.Printf("reports generate tracking error: %v", err)
+	}
+
 	if IsHTMX(c) {
-		c.Response().Header().Set("HX-Trigger", `{"show-toast":{"message":"Report generation started","intent":"success"}}`)
+		c.Response().Header().Set("HX-Trigger", `{"show-toast":{"message":"Report generation started","intent":"success"},"reports-activity-refresh":true}`)
 		return Render(c, http.StatusOK, webpages.GenerateSuccessFragment())
 	}
 

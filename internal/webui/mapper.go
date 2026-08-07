@@ -13,6 +13,7 @@ import (
 
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/domain"
+	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/scheduling"
 	"github.com/agentic-demo/platform/internal/sources"
@@ -104,6 +105,51 @@ func MapReportDetail(r *reports.StoredReport) ReportDetailData {
 		GeneratedAt: FormatDate(r.GeneratedAt),
 		ContentHTML: RenderMarkdown(r.Content),
 		Citations:   ParseCitations(r.Citations),
+	}
+}
+
+// MapGenerationActivity converts tracked generation jobs into activity panel
+// view models. states holds the live queue state for jobs the Inspector could
+// still find; a live state overrides the durable DB status. Jobs absent from
+// states keep their recorded outcome.
+func MapGenerationActivity(jobs []reports.GenerationJob, states map[string]queue.JobState) GenerationActivityData {
+	items := make([]GenerationActivityItem, len(jobs))
+	for i := range jobs {
+		job := &jobs[i]
+		item := GenerationActivityItem{
+			ID:         job.ID.String(),
+			TypeLabel:  ReportTypeLabel(job.ReportType),
+			TypeIntent: ReportTypeIntent(job.ReportType),
+			Focus:      job.Focus,
+			EnqueuedAt: FormatTimeAgo(job.EnqueuedAt),
+		}
+
+		status := queue.JobStatus(job.Status)
+		errMsg := job.Error
+		if state, ok := states[job.TaskID]; ok {
+			status = state.Status
+			errMsg = state.Error
+		}
+		item.Status, item.StatusLabel, item.StatusIntent, item.Error = generationStatusMeta(status, errMsg)
+		items[i] = item
+	}
+	return GenerationActivityData{Items: items}
+}
+
+// generationStatusMeta maps a job status to its display label and design
+// intent. Failed jobs carry their error message for inline display.
+func generationStatusMeta(status queue.JobStatus, errMsg string) (statusKey, label, intent, errOut string) {
+	switch status {
+	case queue.JobQueued:
+		return string(queue.JobQueued), "Queued", "info", ""
+	case queue.JobRunning:
+		return string(queue.JobRunning), "Running", "info", ""
+	case queue.JobSucceeded:
+		return string(queue.JobSucceeded), "Succeeded", "success", ""
+	case queue.JobFailed:
+		return string(queue.JobFailed), "Failed", "error", errMsg
+	default:
+		return string(queue.JobUnknown), "Unknown", "muted", ""
 	}
 }
 

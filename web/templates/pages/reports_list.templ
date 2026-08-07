@@ -4,7 +4,7 @@ import "github.com/agentic-demo/platform/internal/webui"
 import "github.com/agentic-demo/platform/web/templates/layouts"
 import "fmt"
 
-templ ReportsList(data webui.ReportListData, genForm webui.GenerateReportForm, flashes []webui.Flash) {
+templ ReportsList(data webui.ReportListData, genForm webui.GenerateReportForm, flashes []webui.Flash, activity webui.GenerationActivityData) {
 	@layouts.Base("Reports", flashes) {
 		<div class="space-y-6" x-data="{ genOpen: false }">
 			<div class="flex items-center justify-between">
@@ -24,6 +24,8 @@ templ ReportsList(data webui.ReportListData, genForm webui.GenerateReportForm, f
 			</div>
 
 			@GenerateReportModal(genForm)
+
+			@GenerationActivityCard(activity)
 
 			if len(data.Reports) == 0 && data.Page == 1 {
 				@ReportsEmptyState()
@@ -260,4 +262,85 @@ templ GenerateSuccessFragment() {
 		<p class="font-medium text-content mt-3">Report generation started</p>
 		<p class="text-sm text-content-secondary mt-1">Your report will appear here once the worker finishes.</p>
 	</div>
+}
+
+// GenerationActivityCard lists recent on-demand report generation jobs with
+// their live status. It polls GET /reports/activity on the same cadence as
+// the report list and refreshes itself, and listens for an immediate refresh
+// after a new generation is started.
+templ GenerationActivityCard(data webui.GenerationActivityData) {
+	<div
+		id="gen-activity"
+		hx-get="/reports/activity"
+		hx-trigger="every 10s, reports-activity-refresh from:body"
+		hx-swap="outerHTML"
+		class="bg-surface-card border border-border rounded-lg shadow-sm overflow-hidden"
+	>
+		<div class="flex items-center justify-between px-4 py-3 border-b border-border">
+			<h2 class="text-sm font-semibold text-content">Recent Activity</h2>
+			<span class="text-xs text-content-muted">Refreshes automatically</span>
+		</div>
+		if len(data.Items) == 0 {
+			<div class="px-4 py-6 text-center text-sm text-content-muted">
+				No generation activity yet. Reports you generate will show up here.
+			</div>
+		} else {
+			<ul class="divide-y divide-border">
+				for _, item := range data.Items {
+					@GenerationActivityRow(item)
+				}
+			</ul>
+		}
+	</div>
+}
+
+// GenerationActivityFragment renders the activity card alone for HTMX
+// polling (GET /reports/activity).
+templ GenerationActivityFragment(data webui.GenerationActivityData) {
+	@GenerationActivityCard(data)
+}
+
+templ GenerationActivityRow(item webui.GenerationActivityItem) {
+	<li class="px-4 py-3 flex items-start justify-between gap-4">
+		<div class="min-w-0">
+			<div class="flex flex-wrap items-center gap-2">
+				@TypeBadge(item.TypeLabel, item.TypeIntent)
+				@JobStatusBadge(item.StatusLabel, item.StatusIntent, item.Status == "running")
+			</div>
+			if item.Error != "" {
+				<p class="mt-1 text-xs text-intent-error break-words" title={ item.Error }>{ item.Error }</p>
+			} else if item.Focus != "" {
+				<p class="mt-1 text-xs text-content-secondary truncate" title={ item.Focus }>{ item.Focus }</p>
+			}
+		</div>
+		<span class="text-xs text-content-muted whitespace-nowrap">{ item.EnqueuedAt }</span>
+	</li>
+}
+
+// JobStatusBadge renders a job status pill. Running jobs carry a spinner so
+// color is never the sole status indicator.
+templ JobStatusBadge(label string, intent string, running bool) {
+	<span class={ fmt.Sprintf("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium %s", statusClass(intent)) }>
+		if running {
+			<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+			</svg>
+		}
+		{ label }
+	</span>
+}
+
+// statusClass maps a status intent to badge color classes.
+func statusClass(intent string) string {
+	switch intent {
+	case "info":
+		return "bg-intent-info/10 text-intent-info"
+	case "success":
+		return "bg-intent-success/10 text-intent-success"
+	case "error":
+		return "bg-intent-error/10 text-intent-error"
+	default:
+		return "bg-border/50 text-content-muted"
+	}
 }

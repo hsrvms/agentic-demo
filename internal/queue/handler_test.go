@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -79,10 +80,14 @@ func (f *fakeResolver) Resolve(_ context.Context, _ domain.TenantID, _ string) (
 
 type mockLLMClient struct {
 	called atomic.Bool
+	err    error
 }
 
 func (m *mockLLMClient) Complete(_ context.Context, _ []domain.Message, _ llm.Options) (domain.CompletionResult, error) {
 	m.called.Store(true)
+	if m.err != nil {
+		return domain.CompletionResult{}, m.err
+	}
 	return domain.CompletionResult{
 		Text:         "Report content",
 		InputTokens:  10,
@@ -373,9 +378,33 @@ func TestRegisterHandlers(t *testing.T) {
 
 // --- mockReportService ---
 
+type jobMark struct {
+	taskID string
+	status reports.GenerationJobStatus
+	errMsg string
+}
+
 type mockReportService struct {
+	mu        sync.Mutex
 	created   []reports.StoredReport
 	createErr error
+	marks     []jobMark
+}
+
+// createdCount returns the number of persisted reports. Safe for concurrent
+// use with the asynq worker goroutine.
+func (m *mockReportService) createdCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.created)
+}
+
+// marksSnapshot returns a copy of the recorded job marks. Safe for
+// concurrent use with the asynq worker goroutine.
+func (m *mockReportService) marksSnapshot() []jobMark {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]jobMark(nil), m.marks...)
 }
 
 func (m *mockReportService) Create(_ context.Context, params *reports.CreateReportParams) (reports.StoredReport, error) {
@@ -393,11 +422,15 @@ func (m *mockReportService) Create(_ context.Context, params *reports.CreateRepo
 		GeneratedAt: params.GeneratedAt,
 		CreatedAt:   time.Now(),
 	}
+	m.mu.Lock()
 	m.created = append(m.created, r)
+	m.mu.Unlock()
 	return r, nil
 }
 
 func (m *mockReportService) GetByID(_ context.Context, id uuid.UUID) (reports.StoredReport, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := range m.created {
 		if m.created[i].ID == id {
 			return m.created[i], nil
@@ -411,6 +444,35 @@ func (m *mockReportService) ListByTenant(_ context.Context, _ string, _, _ int) 
 }
 
 func (m *mockReportService) Delete(_ context.Context, _ uuid.UUID) error {
+	return nil
+}
+
+func (m *mockReportService) TrackGenerationJob(_ context.Context, _, _, _, _ string) error {
+	return nil
+}
+
+func (m *mockReportService) ListGenerationJobs(_ context.Context, _ string, _ int) ([]reports.GenerationJob, error) {
+	return nil, nil
+}
+
+func (m *mockReportService) MarkGenerationJobRunning(_ context.Context, taskID string) error {
+	m.mu.Lock()
+	m.marks = append(m.marks, jobMark{taskID: taskID, status: reports.GenerationJobRunning})
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockReportService) MarkGenerationJobSucceeded(_ context.Context, taskID string) error {
+	m.mu.Lock()
+	m.marks = append(m.marks, jobMark{taskID: taskID, status: reports.GenerationJobSucceeded})
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mockReportService) MarkGenerationJobFailed(_ context.Context, taskID, errMsg string) error {
+	m.mu.Lock()
+	m.marks = append(m.marks, jobMark{taskID: taskID, status: reports.GenerationJobFailed, errMsg: errMsg})
+	m.mu.Unlock()
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -14,13 +15,18 @@ import (
 
 // mockReportRepo implements Repository for unit tests.
 type mockReportRepo struct {
-	reports   map[uuid.UUID]db.Report
-	createErr error
-	findErr   error
+	reports    map[uuid.UUID]db.Report
+	createErr  error
+	findErr    error
+	jobs       map[uuid.UUID]db.ReportGenerationJob
+	lastUpdate *db.UpdateGenerationJobParams
 }
 
 func newMockReportRepo() *mockReportRepo {
-	return &mockReportRepo{reports: make(map[uuid.UUID]db.Report)}
+	return &mockReportRepo{
+		reports: make(map[uuid.UUID]db.Report),
+		jobs:    make(map[uuid.UUID]db.ReportGenerationJob),
+	}
 }
 
 func (m *mockReportRepo) Create(_ context.Context, params *db.CreateReportParams) (db.Report, error) {
@@ -85,6 +91,45 @@ func (m *mockReportRepo) CountByTenant(_ context.Context, tenantID string) (int3
 
 func (m *mockReportRepo) Delete(_ context.Context, id uuid.UUID) error {
 	delete(m.reports, id)
+	return nil
+}
+
+func (m *mockReportRepo) CreateGenerationJob(_ context.Context, params *db.CreateGenerationJobParams) (db.ReportGenerationJob, error) {
+	if m.createErr != nil {
+		return db.ReportGenerationJob{}, m.createErr
+	}
+	job := db.ReportGenerationJob{
+		ID:         uuid.New(),
+		TenantID:   params.TenantID,
+		TaskID:     params.TaskID,
+		ReportType: params.ReportType,
+		Focus:      params.Focus,
+		Status:     "queued",
+		Error:      "",
+		EnqueuedAt: time.Now(),
+		CreatedAt:  time.Now(),
+	}
+	m.jobs[job.ID] = job
+	return job, nil
+}
+
+func (m *mockReportRepo) ListGenerationJobsByTenant(_ context.Context, params *db.ListGenerationJobsByTenantParams) ([]db.ReportGenerationJob, error) {
+	result := make([]db.ReportGenerationJob, 0, len(m.jobs))
+	for id := range m.jobs {
+		if m.jobs[id].TenantID == params.TenantID {
+			result = append(result, m.jobs[id])
+		}
+	}
+	// Newest first, then limit.
+	sort.Slice(result, func(i, j int) bool { return result[i].EnqueuedAt.After(result[j].EnqueuedAt) })
+	if int(params.Limit) < len(result) {
+		result = result[:params.Limit]
+	}
+	return result, nil
+}
+
+func (m *mockReportRepo) UpdateGenerationJob(_ context.Context, params *db.UpdateGenerationJobParams) error {
+	m.lastUpdate = params
 	return nil
 }
 
