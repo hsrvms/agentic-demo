@@ -32,8 +32,30 @@ defined in the glossary. If you need to introduce a new term, update
 | `a-h/templ`            | Type-safe HTML template generation        |
 | `air`              | Live reload in development                |
 | `staticcheck`      | Additional static analysis                |
+| `gh`               | GitHub CLI — issues, PRs, repo metadata   |
 
 Frontend assets (Tailwind CSS, Alpine.js, HTMX) are loaded via CDN — no build step required. See `.pi/skills/web-design-guide/` for the full design system.
+
+---
+
+## GitHub Issues
+
+Whenever the user references a GitHub issue to implement (e.g. "implement #42",
+"fix issue 17", or pastes an issue URL), use the `gh` CLI instead of guessing or
+relying on secondhand descriptions.
+
+Rules:
+
+- Fetch the issue first:
+  `gh issue view <number> --json title,body,labels,assignees,comments`
+  — one call returns the issue body, labels, assignees, and all comments.
+  Add `--jq` to filter when you only need part of it.
+- If the issue links to specs or design docs (see `docs/specs/`), read them
+  before writing code.
+- Never invent requirements that are not in the issue or its discussion thread;
+  if the issue is ambiguous, ask the user before implementing.
+- Keep the implementation scoped to what the issue asks for — no drive-by
+  refactors unless the issue requests them.
 
 ---
 
