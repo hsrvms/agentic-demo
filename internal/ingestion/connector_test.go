@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,14 +43,14 @@ func (f *fakeSourceReader) MarkError(ctx context.Context, tenantID domain.Tenant
 	return nil
 }
 
-func fileSource(tenantID, sourceID, filename, objectKey string) Source {
+func fileSource(tenantID, filename, objectKey string) Source {
 	cfg, _ := json.Marshal(map[string]any{
 		"filename":   filename,
 		"size":       int64(1024),
 		"object_key": objectKey,
 	})
 	return Source{
-		SourceID:   sourceID,
+		SourceID:   "abc",
 		TenantID:   domain.TenantID(tenantID),
 		SourceType: sourceTypeFileUpload,
 		Config:     cfg,
@@ -66,7 +67,7 @@ func TestConnectorResolver_ResolvesFileUpload(t *testing.T) {
 	}
 
 	reader := &fakeSourceReader{sources: map[string]Source{
-		"abc": fileSource("tenant-a", "abc", "notes.txt", "sources/abc/file"),
+		"abc": fileSource("tenant-a", "notes.txt", "sources/abc/file"),
 	}}
 
 	resolver := NewConnectorResolver(reader, objects)
@@ -187,7 +188,7 @@ func TestConnectorResolver_ForeignSourceRejected(t *testing.T) {
 	objects := storage.NewMemoryObjectStore()
 	// The source belongs to tenant-b; the job asks for tenant-a.
 	reader := &fakeSourceReader{sources: map[string]Source{
-		"abc": fileSource("tenant-b", "abc", "notes.txt", "sources/abc/file"),
+		"abc": fileSource("tenant-b", "notes.txt", "sources/abc/file"),
 	}}
 
 	resolver := NewConnectorResolver(reader, objects)
@@ -255,7 +256,7 @@ func TestConnectorResolver_MissingObjectKey(t *testing.T) {
 func TestConnectorResolver_RejectsEscapingObjectKey(t *testing.T) {
 	objects := storage.NewMemoryObjectStore()
 	reader := &fakeSourceReader{sources: map[string]Source{
-		"abc": fileSource("tenant-a", "abc", "a.txt", "tenant/other-tenant/file"),
+		"abc": fileSource("tenant-a", "a.txt", "tenant/other-tenant/file"),
 	}}
 
 	resolver := NewConnectorResolver(reader, objects)
@@ -275,6 +276,7 @@ func TestFileConnector_RejectsEscapingKeyOnExtract(t *testing.T) {
 		tenantID:  domain.TenantID("tenant-a"),
 		sourceID:  "abc",
 		objectKey: "../escape",
+		parser:    NewDocumentParser(),
 		objects:   objects,
 	}
 
@@ -298,6 +300,7 @@ func TestFileConnector_ReadsBytesFromObjectStore(t *testing.T) {
 		objectKey: "sources/abc/file",
 		filename:  "report.csv",
 		docType:   "csv",
+		parser:    NewDocumentParser(),
 		objects:   objects,
 	}
 
@@ -310,5 +313,161 @@ func TestFileConnector_ReadsBytesFromObjectStore(t *testing.T) {
 	}
 	if docs[0].Metadata["document_type"] != "csv" {
 		t.Errorf("document_type = %q, want csv", docs[0].Metadata["document_type"])
+	}
+}
+
+// TestFileConnector_ParsesBinaryDocument verifies that a binary document's
+// bytes are parsed into clean text before they become a RawDocument, and that
+// the document metadata is preserved.
+func TestFileConnector_ParsesBinaryDocument(t *testing.T) {
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-a")
+	objects := storage.NewMemoryObjectStore()
+
+	pdfBytes := buildMinimalPDF("Hello PDF world")
+	if err := objects.Put(ctx, tenantID, "sources/abc/file", bytes.NewReader(pdfBytes), int64(len(pdfBytes))); err != nil {
+		t.Fatalf("seed object: %v", err)
+	}
+
+	conn := &FileConnector{
+		tenantID:  tenantID,
+		sourceID:  "abc",
+		objectKey: "sources/abc/file",
+		filename:  "report.pdf",
+		docType:   "pdf",
+		parser:    NewDocumentParser(),
+		objects:   objects,
+	}
+
+	docs, err := conn.Extract(ctx)
+	if err != nil {
+		t.Fatalf("Extract failed: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 document, got %d", len(docs))
+	}
+	if docs[0].Content != "Hello PDF world" {
+		t.Errorf("document content = %q, want parsed text", docs[0].Content)
+	}
+	if docs[0].Metadata["document_type"] != "pdf" {
+		t.Errorf("document_type = %q, want pdf", docs[0].Metadata["document_type"])
+	}
+	if docs[0].Metadata["source"] != "report.pdf" {
+		t.Errorf("source = %q, want report.pdf", docs[0].Metadata["source"])
+	}
+}
+
+// TestFileConnector_UnparseableDocumentFails verifies that a supported type
+// whose bytes cannot be parsed surfaces as an Extract error (retryable, not a
+// resolution failure).
+func TestFileConnector_UnparseableDocumentFails(t *testing.T) {
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-a")
+	objects := storage.NewMemoryObjectStore()
+	if err := objects.Put(ctx, tenantID, "sources/abc/file", strings.NewReader("not a pdf at all"), 18); err != nil {
+		t.Fatalf("seed object: %v", err)
+	}
+
+	conn := &FileConnector{
+		tenantID:  tenantID,
+		sourceID:  "abc",
+		objectKey: "sources/abc/file",
+		filename:  "broken.pdf",
+		docType:   "pdf",
+		parser:    NewDocumentParser(),
+		objects:   objects,
+	}
+
+	_, err := conn.Extract(ctx)
+	if err == nil {
+		t.Fatal("expected Extract to fail for unparseable bytes")
+	}
+}
+
+// TestConnectorResolver_UnsupportedExtensionMarksSourceError verifies that a
+// file whose extension resolves to no supported document type (legacy .xls,
+// unknown extensions) fails at resolve time: the source is marked error and
+// the queue skips retry (issue 68 scoping).
+func TestConnectorResolver_UnsupportedExtensionMarksSourceError(t *testing.T) {
+	objects := storage.NewMemoryObjectStore()
+	ctx := context.Background()
+
+	// The object exists but is not a PDF, so the sniff classifies the
+	// extension-less file as permanently unsupported.
+	for _, filename := range []string{"legacy.xls", "notes.xyz"} {
+		if err := objects.Put(ctx, domain.TenantID("tenant-a"), "sources/abc/file", strings.NewReader("plain text"), 11); err != nil {
+			t.Fatalf("seed object: %v", err)
+		}
+		reader := &fakeSourceReader{sources: map[string]Source{
+			"abc": fileSource("tenant-a", filename, "sources/abc/file"),
+		}}
+		resolver := NewConnectorResolver(reader, objects)
+
+		_, err := resolver.Resolve(ctx, domain.TenantID("tenant-a"), "abc")
+		if !errors.Is(err, ErrUnsupportedDocumentType) {
+			t.Errorf("%s: expected ErrUnsupportedDocumentType, got %v", filename, err)
+		}
+		if !errors.Is(err, ErrResolutionFailed) {
+			t.Errorf("%s: expected ErrResolutionFailed wrapping, got %v", filename, err)
+		}
+		if len(reader.marked) != 1 || reader.marked[0] != "abc" {
+			t.Errorf("%s: expected source marked error, got %v", filename, reader.marked)
+		}
+	}
+}
+
+// TestConnectorResolver_MisnamedPDFSniffed verifies the magic-byte fallback: a
+// file whose extension is unknown but whose bytes are a PDF is resolved as a
+// PDF connector, so a misnamed upload still parses.
+func TestConnectorResolver_MisnamedPDFSniffed(t *testing.T) {
+	objects := storage.NewMemoryObjectStore()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-a")
+
+	pdfBytes := buildMinimalPDF("Hidden PDF content")
+	if err := objects.Put(ctx, tenantID, "sources/abc/file", bytes.NewReader(pdfBytes), int64(len(pdfBytes))); err != nil {
+		t.Fatalf("seed object: %v", err)
+	}
+	reader := &fakeSourceReader{sources: map[string]Source{
+		"abc": fileSource("tenant-a", "report.pdf.xyz", "sources/abc/file"),
+	}}
+	resolver := NewConnectorResolver(reader, objects)
+
+	conn, err := resolver.Resolve(ctx, tenantID, "abc")
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	docs, err := conn.Extract(ctx)
+	if err != nil {
+		t.Fatalf("Extract failed: %v", err)
+	}
+	if len(docs) != 1 || docs[0].Content != "Hidden PDF content" {
+		t.Fatalf("unexpected documents: %+v", docs)
+	}
+	if docs[0].Metadata["document_type"] != "pdf" {
+		t.Errorf("document_type = %q, want pdf", docs[0].Metadata["document_type"])
+	}
+}
+
+// TestConnectorResolver_SniffReadFailureRetries verifies that a transient
+// failure while peeking an unknown-extension file (e.g. the object is missing)
+// is NOT treated as a permanent resolution failure: no MarkError, no
+// SkipRetry — the queue retries.
+func TestConnectorResolver_SniffReadFailureRetries(t *testing.T) {
+	objects := storage.NewMemoryObjectStore()
+	reader := &fakeSourceReader{sources: map[string]Source{
+		"abc": fileSource("tenant-a", "notes.xyz", "sources/abc/missing"),
+	}}
+	resolver := NewConnectorResolver(reader, objects)
+
+	_, err := resolver.Resolve(context.Background(), domain.TenantID("tenant-a"), "abc")
+	if err == nil {
+		t.Fatal("expected an error for a missing object")
+	}
+	if errors.Is(err, ErrResolutionFailed) {
+		t.Errorf("transient peek failure must not be permanent, got ErrResolutionFailed: %v", err)
+	}
+	if len(reader.marked) != 0 {
+		t.Errorf("transient peek failure must not mark the source error, got %v", reader.marked)
 	}
 }

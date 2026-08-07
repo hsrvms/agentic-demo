@@ -8,6 +8,7 @@
 package ingestion
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -86,13 +87,14 @@ var (
 type connectorResolver struct {
 	sources SourceReader
 	objects ObjectReader
+	parser  DocumentParser
 }
 
 // NewConnectorResolver builds a ConnectorResolver from the narrow seams it
 // consumes. sources is implemented by the Sources module; objects is any
 // ObjectStore adapter (MinIO or the in-memory fake).
 func NewConnectorResolver(sources SourceReader, objects ObjectReader) ConnectorResolver {
-	return &connectorResolver{sources: sources, objects: objects}
+	return &connectorResolver{sources: sources, objects: objects, parser: NewDocumentParser()}
 }
 
 func (r *connectorResolver) Resolve(ctx context.Context, tenantID domain.TenantID, sourceID string) (Connector, error) {
@@ -148,14 +150,56 @@ func (r *connectorResolver) buildFileConnector(ctx context.Context, src *Source)
 		return nil, resolutionFailed(connErr)
 	}
 
+	// The filename extension is the primary document-type signal. An unknown
+	// extension is sniffed once: a misnamed PDF still parses, anything else is
+	// an unsupported document type and a permanent resolution failure.
+	docType := extensionToDocType(strings.ToLower(extensionOf(cfg.Filename)))
+	if docType == docTypeUnknown {
+		docType, err = r.sniffDocType(ctx, src, cfg.ObjectKey)
+		if err != nil {
+			// A failed peek (e.g. the object is momentarily unreadable) is a
+			// transient failure, not a permanent one: return it unwrapped so
+			// the queue retries without marking the source error.
+			return nil, err
+		}
+	}
+	if docType == docTypeUnknown {
+		connErr := fmt.Errorf("%w: %s", ErrUnsupportedDocumentType, cfg.Filename)
+		_ = r.sources.MarkError(ctx, src.TenantID, src.SourceID, connErr.Error())
+		return nil, resolutionFailed(connErr)
+	}
+
 	return &FileConnector{
 		tenantID:  src.TenantID,
 		sourceID:  src.SourceID,
 		objectKey: cfg.ObjectKey,
 		filename:  cfg.Filename,
-		docType:   extensionToDocType(strings.ToLower(extensionOf(cfg.Filename))),
+		docType:   docType,
+		parser:    r.parser,
 		objects:   r.objects,
 	}, nil
+}
+
+// sniffDocType peeks at the object's first bytes to detect a misnamed PDF.
+// Only an unknown extension reaches this path. A successful peek that is not
+// a PDF is a permanent classification failure (the caller marks the source
+// error); a failed peek is transient and left to the queue to retry.
+func (r *connectorResolver) sniffDocType(ctx context.Context, src *Source, objectKey string) (string, error) {
+	rc, err := r.objects.Get(ctx, src.TenantID, objectKey)
+	if err != nil {
+		return "", fmt.Errorf("peek %s: %w", objectKey, err)
+	}
+	defer rc.Close()
+
+	head := make([]byte, 5)
+	n, err := io.ReadFull(rc, head)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return "", fmt.Errorf("peek %s: %w", objectKey, err)
+	}
+	if bytes.HasPrefix(head[:n], []byte("%PDF-")) {
+		return docTypePDF, nil
+	}
+	return docTypeUnknown, nil
 }
 
 // fileUploadConfig is the {filename, size, object_key} shape recorded in a

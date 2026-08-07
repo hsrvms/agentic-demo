@@ -15,22 +15,25 @@ type Connector interface {
 	Extract(ctx context.Context) ([]domain.RawDocument, error)
 }
 
-// FileConnector reads an uploaded file's bytes from the object store and
-// extracts its content as a single document. It never reads from a local
-// path — the bytes live in the tenant-scoped object store, so the connector
-// survives worker restarts and is tenant-isolated by construction.
+// FileConnector reads an uploaded file's bytes from the object store, parses
+// them into clean text via the DocumentParser seam, and extracts the result
+// as a single document. It never reads from a local path — the bytes live in
+// the tenant-scoped object store, so the connector survives worker restarts
+// and is tenant-isolated by construction.
 type FileConnector struct {
 	tenantID  domain.TenantID
 	sourceID  string
 	objectKey string // tenant-relative key into the object store
 	filename  string
 	docType   string
+	parser    DocumentParser
 	objects   ObjectReader
 }
 
-// Extract reads the object referenced by the config and returns it as a single
-// RawDocument. The document ID is the source ID, stable across re-ingestion so
-// a source's documents can be replaced without accumulating duplicates.
+// Extract reads the object referenced by the config, parses it according to
+// its detected document type, and returns it as a single RawDocument. The
+// document ID is the source ID, stable across re-ingestion so a source's
+// documents can be replaced without accumulating duplicates.
 func (c *FileConnector) Extract(ctx context.Context) ([]domain.RawDocument, error) {
 	// Defense-in-depth: never read a key that could escape the tenant's prefix.
 	if err := validateObjectKey(c.objectKey); err != nil {
@@ -48,10 +51,15 @@ func (c *FileConnector) Extract(ctx context.Context) ([]domain.RawDocument, erro
 		return nil, fmt.Errorf("read file %s: %w", c.objectKey, err)
 	}
 
+	text, err := c.parser.Parse(c.docType, content)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", c.filename, err)
+	}
+
 	return []domain.RawDocument{
 		{
 			ID:      c.sourceID,
-			Content: string(content),
+			Content: text,
 			Metadata: map[string]string{
 				"source":        c.filename,
 				"document_type": c.docType,
@@ -64,16 +72,16 @@ func (c *FileConnector) Extract(ctx context.Context) ([]domain.RawDocument, erro
 func extensionToDocType(ext string) string {
 	switch ext {
 	case ".pdf":
-		return "pdf"
+		return docTypePDF
 	case ".docx":
-		return "docx"
+		return docTypeDOCX
 	case ".csv":
-		return "csv"
-	case ".xlsx", ".xls":
-		return "xlsx"
+		return docTypeCSV
+	case ".xlsx":
+		return docTypeXLSX
 	case ".txt", ".md":
-		return "text"
+		return docTypeText
 	default:
-		return "unknown"
+		return docTypeUnknown
 	}
 }
