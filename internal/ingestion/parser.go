@@ -74,8 +74,9 @@ func (p *documentParser) Parse(docType string, data []byte) (string, error) {
 }
 
 // parsePDF extracts the text of every page and joins the non-empty pages.
-// Page extraction returns raw content-stream text; each page is trimmed and
-// pages are separated by a blank line so the chunker sees page boundaries.
+// Page extraction returns raw content-stream text; each page is normalized
+// into prose paragraphs and pages are separated by a blank line so the
+// chunker sees page boundaries.
 func parsePDF(data []byte) (string, error) {
 	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
@@ -89,10 +90,73 @@ func parsePDF(data []byte) (string, error) {
 			return "", fmt.Errorf("extract page %d: %w", i, err)
 		}
 		if trimmed := strings.TrimSpace(text); trimmed != "" {
-			pages = append(pages, trimmed)
+			pages = append(pages, normalizePDFText(trimmed))
 		}
 	}
 	return strings.Join(pages, "\n\n"), nil
+}
+
+// normalizePDFText rebuilds prose paragraphs from the extractor's line
+// fragments. The pure-Go extractor emits one line per text-showing object, so
+// web-generated PDFs (one object per word) arrive word-per-line, often with
+// blank lines between words. Fragments are joined with spaces and split into
+// paragraphs at sentence-ending punctuation; a trailing hyphen joins the next
+// fragment without a space. Blank lines carry no layout signal from this
+// extractor and are treated as noise. Headings without punctuation merge into
+// the following paragraph — an accepted loss for retrieval chunking.
+func normalizePDFText(pageText string) string {
+	lines := strings.Split(pageText, "\n")
+
+	var paras []string
+	var words []string
+	flush := func() {
+		if len(words) == 0 {
+			return
+		}
+		var b strings.Builder
+		joinNext := false
+		for _, w := range words {
+			if joinNext {
+				b.WriteString(w)
+				joinNext = false
+				continue
+			}
+			if b.Len() > 0 {
+				b.WriteString(" ")
+			}
+			b.WriteString(w)
+			if strings.HasSuffix(w, "-") {
+				joinNext = true
+			}
+		}
+		paras = append(paras, b.String())
+		words = words[:0]
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		words = append(words, line)
+		if endsSentence(line) {
+			flush()
+		}
+	}
+	flush()
+
+	return strings.Join(paras, "\n\n")
+}
+
+// endsSentence reports whether a line ends with punctuation that closes a
+// sentence or a code line, so the next fragment starts a new paragraph.
+func endsSentence(line string) bool {
+	last := line[len(line)-1]
+	switch last {
+	case '.', '!', '?', ':', ';', ')', '}', ']', '{', '"', '\'':
+		return true
+	}
+	return false
 }
 
 // Cap on the uncompressed size of any single archive entry and on the number

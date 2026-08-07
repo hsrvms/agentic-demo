@@ -166,6 +166,59 @@ func TestIngestWorker_BinaryDocumentChunked(t *testing.T) {
 	}
 }
 
+// TestIngestWorker_WordPerObjectPDFChunked reproduces the reported issue-68
+// regression: a web-generated PDF whose words are extracted word-per-line
+// (with blank lines) must reach the Knowledge Base as joined prose paragraphs,
+// not as single-word chunks.
+func TestIngestWorker_WordPerObjectPDFChunked(t *testing.T) {
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-a")
+
+	objects := storage.NewMemoryObjectStore()
+	pdfBytes := buildWordPerObjectPDF(
+		"Introduction", "to", "QMK", "Firmware.",
+		"It", "powers", "custom", "keyboards.",
+	)
+	if err := objects.Put(ctx, tenantID, "sources/abc/file", bytes.NewReader(pdfBytes), int64(len(pdfBytes))); err != nil {
+		t.Fatalf("seed object: %v", err)
+	}
+	reader := &fakeSourceReader{sources: map[string]Source{
+		"abc": fileSource("tenant-a", "qmk.pdf", "sources/abc/file"),
+	}}
+	resolver := NewConnectorResolver(reader, objects)
+
+	store := &recordingStore{}
+	worker := NewIngestWorker(
+		resolver,
+		knowledge.NewRecursiveChunker(100, 20),
+		store,
+		usage.NoOpEmitter{},
+		"text-embedding-v4",
+	)
+
+	if _, err := worker.Ingest(ctx, tenantID, "abc"); err != nil {
+		t.Fatalf("ingest failed: %v", err)
+	}
+
+	if strings.Contains(store.lastDocs[0].Content, "\n\nto\n\n") {
+		t.Fatalf("stored document still contains the word-per-line artifact: %q", store.lastDocs[0].Content)
+	}
+	if !strings.Contains(store.lastDocs[0].Content, "Introduction to QMK Firmware.") {
+		t.Errorf("stored document lacks joined prose: %q", store.lastDocs[0].Content)
+	}
+
+	found := false
+	for _, chunk := range store.lastChunks {
+		if strings.Contains(chunk.Content, "It powers custom keyboards.") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("no chunk contains joined prose: %+v", store.lastChunks)
+	}
+}
+
 // TestIngestWorker_DedupCollapsesWithinRun verifies dedup collapses duplicate
 // chunk content within a single ingest run (story 16), e.g. a source that
 // yields the same paragraph twice stores only one chunk.

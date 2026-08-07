@@ -57,14 +57,20 @@ func buildMinimalPDF(texts ...string) []byte {
 	}
 	write(fontObj, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
 
+	return finishPDF(&buf, offsets, lastObj)
+}
+
+// finishPDF appends the xref table, trailer, and EOF marker for a PDF whose
+// objects were written with recorded offsets, and returns the complete bytes.
+func finishPDF(buf *bytes.Buffer, offsets []int, lastObj int) []byte {
 	xrefOffset := buf.Len()
-	fmt.Fprintf(&buf, "xref\n0 %d\n0000000000 65535 f \n", lastObj+1)
+	fmt.Fprintf(buf, "xref\n0 %d\n0000000000 65535 f \n", lastObj+1)
 	for i := 1; i <= lastObj; i++ {
-		fmt.Fprintf(&buf, "%010d 00000 n \n", offsets[i])
+		fmt.Fprintf(buf, "%010d 00000 n \n", offsets[i])
 	}
 	buf.WriteString("trailer\n")
-	fmt.Fprintf(&buf, "<< /Size %d /Root 1 0 R >>\nstartxref\n", lastObj+1)
-	fmt.Fprintf(&buf, "%d\n%%%%EOF\n", xrefOffset)
+	fmt.Fprintf(buf, "<< /Size %d /Root 1 0 R >>\nstartxref\n", lastObj+1)
+	fmt.Fprintf(buf, "%d\n%%%%EOF\n", xrefOffset)
 	return buf.Bytes()
 }
 
@@ -132,6 +138,43 @@ func buildMinimalXLSX() []byte {
 </worksheet>`,
 	}
 	return zipBytes(files)
+}
+
+// buildWordPerObjectPDF returns a PDF that emits each word as its own text
+// object, advancing the text line (T*) after every word — the shape of
+// web-generated PDFs (e.g. QMK docs) that pure-Go extractors render
+// word-per-line with blank lines between words.
+func buildWordPerObjectPDF(words ...string) []byte {
+	if len(words) == 0 {
+		words = []string{""}
+	}
+
+	// Object layout: 1 catalog, 2 pages, 1 page dict, 1 content stream, font.
+	fontObj := 7
+	var buf bytes.Buffer
+	buf.WriteString("%PDF-1.4\n")
+	offsets := make([]int, fontObj+1)
+	write := func(obj int, s string) {
+		offsets[obj] = buf.Len()
+		fmt.Fprintf(&buf, "%d 0 obj\n%sendobj\n", obj, s)
+	}
+
+	write(1, "<< /Type /Catalog /Pages 2 0 R >>\n")
+	write(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n")
+	var content strings.Builder
+	y := 720.0
+	for _, w := range words {
+		// T* after each word emits a line advance, so the extractor inserts a
+		// second newline — the blank-line artifact seen in real docs PDFs.
+		fmt.Fprintf(&content, "BT /F1 12 Tf 72 %.0f Td (%s) Tj T* ET\n", y, w)
+		y -= 14
+	}
+	write(3, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 %d 0 R >> >> >>\n", fontObj))
+	stream := content.String()
+	write(4, fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream\n", len(stream), stream))
+	write(fontObj, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
+
+	return finishPDF(&buf, offsets, fontObj)
 }
 
 // zipBytes packs the given files into a zip archive.
@@ -219,6 +262,53 @@ func TestParseDOCX_TooLargeRejected(t *testing.T) {
 	_, err := parser.Parse(docTypeDOCX, raw)
 	if !errors.Is(err, ErrDocumentTooLarge) {
 		t.Fatalf("expected ErrDocumentTooLarge, got %v", err)
+	}
+}
+
+func TestParsePDF_WordPerObjectJoinsIntoParagraphs(t *testing.T) {
+	parser := NewDocumentParser()
+
+	// The reported symptom: a web-generated PDF whose words each arrive as
+	// their own line (with blank lines between), which must be rebuilt into
+	// prose paragraphs broken at sentence ends.
+	text, err := parser.Parse(docTypePDF, buildWordPerObjectPDF(
+		"Introduction", "to", "QMK", "Firmware.",
+		"It", "powers", "custom", "keyboards.",
+	))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	want := "Introduction to QMK Firmware.\n\nIt powers custom keyboards."
+	if text != want {
+		t.Errorf("extracted text = %q, want %q", text, want)
+	}
+}
+
+func TestParsePDF_HyphenatedWrapJoins(t *testing.T) {
+	parser := NewDocumentParser()
+
+	// A word split across lines (open- / source) must rejoin without a space.
+	text, err := parser.Parse(docTypePDF, buildWordPerObjectPDF("open-", "source", "project."))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if text != "open-source project." {
+		t.Errorf("extracted text = %q, want %q", text, "open-source project.")
+	}
+}
+
+func TestParsePDF_WellBehavedPDFUnchanged(t *testing.T) {
+	parser := NewDocumentParser()
+
+	// A PDF that already emits whole lines must not be mangled: a single
+	// sentence stays one paragraph.
+	text, err := parser.Parse(docTypePDF, buildMinimalPDF("Quarterly revenue grew by twenty percent."))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if text != "Quarterly revenue grew by twenty percent." {
+		t.Errorf("extracted text = %q, want %q", text, "Quarterly revenue grew by twenty percent.")
 	}
 }
 

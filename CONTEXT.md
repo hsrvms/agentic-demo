@@ -65,7 +65,10 @@ The seam that maps a document's detected type + bytes to clean text. One
 implementation per supported format: pdf, docx, xlsx. text and csv pass
 through unchanged. A file whose type has no parser (legacy .xls, unknown
 extensions) fails ingestion and marks the source error; a misnamed PDF whose
-extension is unknown is still detected via its %PDF- magic bytes.
+extension is unknown is still detected via its %PDF- magic bytes. Extracted
+PDF text is normalized into prose paragraphs: pure-Go extractors emit
+word-per-line fragments for web-generated PDFs, which would otherwise reach
+the Knowledge Base as single-word chunks.
 
 ### Chunk
 A semantically coherent segment of a document with its vector embedding.
