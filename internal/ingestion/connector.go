@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/agentic-demo/platform/internal/domain"
@@ -160,9 +161,39 @@ func (r *connectorResolver) buildFileConnector(ctx context.Context, src *Source)
 // fileUploadConfig is the {filename, size, object_key} shape recorded in a
 // file_upload source's config.
 type fileUploadConfig struct {
-	Filename  string `json:"filename"`
-	Size      int64  `json:"size"`
-	ObjectKey string `json:"object_key"`
+	Filename  string    `json:"filename"`
+	Size      sizeValue `json:"size"`
+	ObjectKey string    `json:"object_key"`
+}
+
+// sizeValue accepts both a JSON number and a JSON string so configs authored
+// before the web layer recorded size numerically still resolve. The value is
+// informational and not used by extraction.
+type sizeValue int64
+
+// UnmarshalJSON accepts a numeric or string-encoded size.
+func (s *sizeValue) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var str string
+		if err := json.Unmarshal(data, &str); err != nil {
+			return err
+		}
+		n, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return err
+		}
+		*s = sizeValue(n)
+		return nil
+	}
+	var n int64
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*s = sizeValue(n)
+	return nil
 }
 
 // parseFileConfig unmarshals a file_upload source's config.

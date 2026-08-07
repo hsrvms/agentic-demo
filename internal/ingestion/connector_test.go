@@ -108,6 +108,40 @@ func TestConnectorResolver_ResolvesFileUpload(t *testing.T) {
 	}
 }
 
+// TestConnectorResolver_FileUploadStringSizeBackwardCompat verifies that a
+// file_upload config whose size was authored as a string (the shape the web
+// layer used before encoding it numerically) still resolves, so existing
+// sources do not break.
+func TestConnectorResolver_FileUploadStringSizeBackwardCompat(t *testing.T) {
+	objects := storage.NewMemoryObjectStore()
+	ctx := context.Background()
+	tenantID := domain.TenantID("tenant-a")
+
+	cfg, _ := json.Marshal(map[string]any{
+		"filename":   "notes.txt",
+		"size":       "1024", // string-encoded
+		"object_key": "sources/abc/file",
+	})
+	reader := &fakeSourceReader{sources: map[string]Source{
+		"abc": {
+			SourceID:   "abc",
+			TenantID:   tenantID,
+			SourceType: sourceTypeFileUpload,
+			Config:     cfg,
+		},
+	}}
+
+	resolver := NewConnectorResolver(reader, objects)
+
+	conn, err := resolver.Resolve(ctx, tenantID, "abc")
+	if err != nil {
+		t.Fatalf("Resolve failed with string-encoded size: %v", err)
+	}
+	if _, ok := conn.(*FileConnector); !ok {
+		t.Fatalf("expected *FileConnector, got %T", conn)
+	}
+}
+
 func TestConnectorResolver_MissingSource(t *testing.T) {
 	objects := storage.NewMemoryObjectStore()
 	reader := &fakeSourceReader{sources: map[string]Source{}}

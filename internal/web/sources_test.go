@@ -518,9 +518,14 @@ func TestSourcesHandler_Create_FileUploadPassesBytesAsFile(t *testing.T) {
 	assert.Equal(t, []byte("hello world"), svc.createdParams.File)
 	assert.Empty(t, svc.createdParams.Credentials)
 
-	var cfg map[string]string
+	var cfg map[string]any
 	require.NoError(t, json.Unmarshal(svc.createdParams.Config, &cfg))
 	assert.Equal(t, "notes.txt", cfg["filename"])
+	// Size is recorded as a JSON number, matching the ingestion resolver's
+	// fileUploadConfig shape.
+	size, ok := cfg["size"].(float64)
+	require.True(t, ok, "size should be a JSON number")
+	assert.EqualValues(t, len("hello world"), size)
 }
 
 func TestSourcesHandler_Create_HTMXValidationError(t *testing.T) {
