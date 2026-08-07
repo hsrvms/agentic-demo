@@ -54,6 +54,22 @@ crm_hubspot, crm_salesforce.
 Unparsed, unstructured content extracted by a Connector. The chunker converts
 RawDocuments into Chunks.
 
+### Parsing
+The ingestion step that turns a Connector's raw bytes into clean text before
+chunking. Text formats pass through unchanged; binary formats (PDF, DOCX,
+XLSX) are parsed by a DocumentParser. Scanned/image-only PDFs are out of
+scope — parsing is text extraction, not OCR.
+
+### DocumentParser
+The seam that maps a document's detected type + bytes to clean text. One
+implementation per supported format: pdf, docx, xlsx. text and csv pass
+through unchanged. A file whose type has no parser (legacy .xls, unknown
+extensions) fails ingestion and marks the source error; a misnamed PDF whose
+extension is unknown is still detected via its %PDF- magic bytes. Extracted
+PDF text is normalized into prose paragraphs: pure-Go extractors emit
+word-per-line fragments for web-generated PDFs, which would otherwise reach
+the Knowledge Base as single-word chunks.
+
 ### Chunk
 A semantically coherent segment of a document with its vector embedding.
 This is the unit of storage and retrieval in the Knowledge Base. Each chunk
@@ -185,10 +201,10 @@ Jobs have types (ingestion:scheduled, report:daily, delivery:email) and
 priorities (high, normal, low). Implemented via asynq on Redis.
 
 ### Ingestion
-The pipeline that pulls data from a DataSource, chunks it, generates
-embeddings, and stores the results in the Knowledge Base. Ingestion runs as
-a job on the queue and can be triggered by a schedule, a manual request, or
-a file upload.
+The pipeline that pulls data from a DataSource, parses it, chunks it,
+generates embeddings, and stores the results in the Knowledge Base. Ingestion
+runs as a job on the queue and can be triggered by a schedule, a manual
+request, or a file upload.
 
 ### ObjectStore
 Tenant-scoped file storage backing uploaded files. Every operation is scoped
