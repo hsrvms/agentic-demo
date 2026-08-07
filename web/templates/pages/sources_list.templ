@@ -98,7 +98,7 @@ templ SourceRow(s webui.SourceItem, csrfToken string) {
 			<a href={ "/sources/" + s.ID } class="text-content font-medium hover:text-primary transition-colors">{ s.Name }</a>
 		</td>
 		<td class="py-3 px-4 text-content-secondary">{ s.SourceLabel }</td>
-		<td class="py-3 px-4">
+		<td class="py-3 px-4" id={ "source-status-" + s.ID }>
 			@StatusBadge(s.Status, s.StatusIntent)
 		</td>
 		<td class="py-3 px-4 text-content-secondary text-xs">
@@ -116,8 +116,9 @@ templ SourceRow(s webui.SourceItem, csrfToken string) {
 			<div class="inline-flex items-center gap-1">
 				<button
 					hx-post={ "/sources/" + s.ID + "/test" }
-					hx-target="#source-status"
+					hx-target={ "#source-status-" + s.ID }
 					hx-swap="innerHTML"
+					hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
 					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
 					aria-label={ "Test " + s.Name }
 				>
@@ -128,8 +129,9 @@ templ SourceRow(s webui.SourceItem, csrfToken string) {
 				</button>
 				<button
 					hx-post={ "/sources/" + s.ID + "/sync" }
-					hx-target="#source-status"
+					hx-target={ "#source-status-" + s.ID }
 					hx-swap="innerHTML"
+					hx-headers={ fmt.Sprintf(`{"X-CSRF-Token": "%s"}`, csrfToken) }
 					class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-content-secondary hover:bg-surface-page hover:text-content focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
 					aria-label={ "Sync " + s.Name }
 				>

@@ -339,9 +339,9 @@ func buildConfigAndCreds(sourceType string, c echo.Context) (config json.RawMess
 		if ferr != nil {
 			return nil, nil, nil, fmt.Errorf("failed to read uploaded file")
 		}
-		cfg := map[string]string{
+		cfg := map[string]any{
 			"filename": f.Filename,
-			"size":     fmt.Sprintf("%d", f.Size),
+			"size":     f.Size,
 		}
 		raw, _ := json.Marshal(cfg)
 		return raw, nil, content, nil
