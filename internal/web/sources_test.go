@@ -75,6 +75,53 @@ func TestSourcesHandler_List_RendersTable(t *testing.T) {
 	assert.Contains(t, body, "inactive")
 }
 
+func TestSourcesHandler_List_RendersTestSyncButtonsWithCSRFAndTarget(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	id := uuid.New()
+	csrf := "test-csrf-token"
+
+	svc := &mockSourceService{
+		page: sources.DataSourcePage{
+			Sources: []sources.DataSource{
+				{
+					ID:         id,
+					Name:       "Website Alpha",
+					SourceType: sources.SourceTypeWebsite,
+					Status:     sources.StatusActive,
+				},
+			},
+			TotalCount: 1,
+			Page:       1,
+			PageSize:   20,
+		},
+	}
+
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources", http.NoBody)
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	ctx = SetCSRFToken(ctx, csrf)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.List(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	body := rec.Body.String()
+
+	// A per-row status cell exists and is targeted by the Test/Sync buttons.
+	assert.Contains(t, body, `id="source-status-`+id.String()+`"`)
+	assert.Contains(t, body, `hx-target="#source-status-`+id.String()+`"`)
+
+	// Both Test and Sync buttons send the CSRF token on hx-post.
+	assert.Contains(t, body, `hx-headers="{&#34;X-CSRF-Token&#34;: &#34;`+csrf+`&#34;}"`)
+	assert.Contains(t, body, `/sources/`+id.String()+`/test`)
+	assert.Contains(t, body, `/sources/`+id.String()+`/sync`)
+}
+
 func TestSourcesHandler_List_EmptyState(t *testing.T) {
 	tenantID := domain.TenantID("t_test")
 
@@ -239,6 +286,47 @@ func TestSourcesHandler_Detail_RendersSource(t *testing.T) {
 	assert.Contains(t, body, "Website")
 	assert.Contains(t, body, "active")
 	assert.Contains(t, body, "https://example.com")
+}
+
+func TestSourcesHandler_Detail_RendersTestSyncButtonsWithCSRF(t *testing.T) {
+	id := uuid.New()
+	csrf := "test-csrf-token"
+
+	svc := &mockSourceService{
+		detailSource: &sources.DataSource{
+			ID:         id,
+			Name:       "My Website",
+			SourceType: sources.SourceTypeWebsite,
+			Status:     sources.StatusActive,
+			Config:     json.RawMessage(`{"url":"https://example.com"}`),
+		},
+	}
+
+	handler := NewSourcesHandler(sources.NewHandlerCore(svc))
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/sources/"+id.String(), http.NoBody)
+	ctx := SetCSRFToken(req.Context(), csrf)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues(id.String())
+
+	err := handler.Detail(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	body := rec.Body.String()
+
+	// The existing status area is targeted.
+	assert.Contains(t, body, `id="detail-status"`)
+	assert.Contains(t, body, `hx-target="#detail-status"`)
+
+	// Both Test and Sync buttons send the CSRF token on hx-post.
+	assert.Contains(t, body, `hx-headers="{&#34;X-CSRF-Token&#34;: &#34;`+csrf+`&#34;}"`)
+	assert.Contains(t, body, `/sources/`+id.String()+`/test`)
+	assert.Contains(t, body, `/sources/`+id.String()+`/sync`)
 }
 
 func TestSourcesHandler_Detail_NotFound(t *testing.T) {
