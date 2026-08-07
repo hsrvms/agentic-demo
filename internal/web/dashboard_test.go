@@ -10,6 +10,7 @@ import (
 	"github.com/agentic-demo/platform/internal/auth"
 	"github.com/agentic-demo/platform/internal/budget"
 	"github.com/agentic-demo/platform/internal/domain"
+	"github.com/agentic-demo/platform/internal/queue"
 	"github.com/agentic-demo/platform/internal/reports"
 	"github.com/agentic-demo/platform/internal/sources"
 	"github.com/agentic-demo/platform/internal/usage"
@@ -63,6 +64,11 @@ type mockReportService struct {
 	err       error
 	report    reports.StoredReport
 	detailErr error
+
+	jobs          []reports.GenerationJob
+	jobsErr       error
+	trackedTaskID string
+	trackErr      error
 }
 
 func (m *mockReportService) Create(_ context.Context, _ *reports.CreateReportParams) (reports.StoredReport, error) {
@@ -80,6 +86,46 @@ func (m *mockReportService) ListByTenant(_ context.Context, _ string, _, _ int) 
 func (m *mockReportService) Delete(_ context.Context, _ uuid.UUID) error {
 	return nil
 }
+
+func (m *mockReportService) TrackGenerationJob(_ context.Context, _, taskID, _, _ string) error {
+	m.trackedTaskID = taskID
+	return m.trackErr
+}
+
+func (m *mockReportService) ListGenerationJobs(_ context.Context, _ string, _ int) ([]reports.GenerationJob, error) {
+	return m.jobs, m.jobsErr
+}
+
+func (m *mockReportService) MarkGenerationJobRunning(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockReportService) MarkGenerationJobSucceeded(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockReportService) MarkGenerationJobFailed(_ context.Context, _, _ string) error {
+	return nil
+}
+
+// mockJobInspector stands in for the queue read path in handler tests.
+type mockJobInspector struct {
+	states map[string]queue.JobState
+	err    error
+}
+
+func (m *mockJobInspector) GetJobState(_ context.Context, taskID string) (queue.JobState, error) {
+	if m.err != nil {
+		return queue.JobState{}, m.err
+	}
+	state, ok := m.states[taskID]
+	if !ok {
+		return queue.JobState{}, queue.ErrJobNotFound
+	}
+	return state, nil
+}
+
+func (m *mockJobInspector) Close() error { return nil }
 
 type mockSourceService struct {
 	page          sources.DataSourcePage

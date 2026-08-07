@@ -60,9 +60,9 @@ func WithSources(sourceCore *sources.HandlerCore) ServerOption {
 }
 
 // WithReports wires the report browsing and generation handler.
-func WithReports(reportService reports.ReportService, jobQueue queue.JobQueue) ServerOption {
+func WithReports(reportService reports.ReportService, jobQueue queue.JobQueue, inspector queue.JobInspector) ServerOption {
 	return func(s *Server) {
-		s.reportsHandler = NewReportsHandler(reportService, jobQueue)
+		s.reportsHandler = NewReportsHandler(reportService, jobQueue, inspector)
 	}
 }
 

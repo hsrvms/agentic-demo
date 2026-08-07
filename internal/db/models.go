@@ -73,6 +73,19 @@ type Report struct {
 	CreatedAt   time.Time   `json:"created_at"`
 }
 
+type ReportGenerationJob struct {
+	ID         uuid.UUID          `json:"id"`
+	TenantID   string             `json:"tenant_id"`
+	TaskID     string             `json:"task_id"`
+	ReportType string             `json:"report_type"`
+	Focus      string             `json:"focus"`
+	Status     string             `json:"status"`
+	Error      string             `json:"error"`
+	EnqueuedAt time.Time          `json:"enqueued_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	CreatedAt  time.Time          `json:"created_at"`
+}
+
 type ReportSchedule struct {
 	ID        uuid.UUID   `json:"id"`
 	TenantID  string      `json:"tenant_id"`

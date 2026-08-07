@@ -34,8 +34,9 @@ type Server struct {
 	echo *echo.Echo
 	pool *pgxpool.Pool
 
-	usageReader usage.UsageReader
-	jobQueue    queue.JobQueue
+	usageReader  usage.UsageReader
+	jobQueue     queue.JobQueue
+	jobInspector queue.JobInspector
 
 	closeOnce sync.Once
 	closeErr  error
@@ -51,7 +52,7 @@ func New(cfg config.Config) (*Server, error) {
 	}
 
 	queries := db.New(pool)
-	usageReader, jobQueue, err := buildServices(cfg.RedisURL)
+	usageReader, jobQueue, jobInspector, err := buildServices(cfg.RedisURL)
 	if err != nil {
 		pool.Close()
 		return nil, err
@@ -60,6 +61,7 @@ func New(cfg config.Config) (*Server, error) {
 	cleanupOnError := func() {
 		_ = usageReader.Close()
 		_ = jobQueue.Close()
+		_ = jobInspector.Close()
 		pool.Close()
 	}
 
@@ -140,7 +142,7 @@ func New(cfg config.Config) (*Server, error) {
 	web.NewServer(authService, tenantService,
 		web.WithDashboard(usageService, reportService, sourceService, budgetService),
 		web.WithSources(sourceCore),
-		web.WithReports(reportService, jobQueue),
+		web.WithReports(reportService, jobQueue, jobInspector),
 		web.WithSchedules(scheduleService),
 		web.WithUsage(usageService),
 		web.WithInvoices(budgetService),
@@ -150,28 +152,36 @@ func New(cfg config.Config) (*Server, error) {
 	e.HTTPErrorHandler = web.MakeErrorHandler(e.HTTPErrorHandler)
 
 	return &Server{
-		echo:        e,
-		pool:        pool,
-		usageReader: usageReader,
-		jobQueue:    jobQueue,
+		echo:         e,
+		pool:         pool,
+		usageReader:  usageReader,
+		jobQueue:     jobQueue,
+		jobInspector: jobInspector,
 	}, nil
 }
 
 // buildServices creates infrastructure shared by the HTTP handlers. Keeping
 // this separate makes cleanup of constructor failures explicit.
-func buildServices(redisURL string) (usage.UsageReader, queue.JobQueue, error) {
+func buildServices(redisURL string) (usage.UsageReader, queue.JobQueue, queue.JobInspector, error) {
 	usageReader, err := usage.NewRedisReader(redisURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("create usage reader: %w", err)
+		return nil, nil, nil, fmt.Errorf("create usage reader: %w", err)
 	}
 
 	jobQueue, err := queue.NewAsynqQueue(redisURL)
 	if err != nil {
 		_ = usageReader.Close()
-		return nil, nil, fmt.Errorf("create job queue: %w", err)
+		return nil, nil, nil, fmt.Errorf("create job queue: %w", err)
 	}
 
-	return usageReader, jobQueue, nil
+	jobInspector, err := queue.NewAsynqInspector(redisURL)
+	if err != nil {
+		_ = jobQueue.Close()
+		_ = usageReader.Close()
+		return nil, nil, nil, fmt.Errorf("create job inspector: %w", err)
+	}
+
+	return usageReader, jobQueue, jobInspector, nil
 }
 
 func health(c echo.Context) error {
@@ -209,6 +219,7 @@ func (s *Server) Close() error {
 		s.closeErr = errors.Join(
 			s.usageReader.Close(),
 			s.jobQueue.Close(),
+			s.jobInspector.Close(),
 		)
 		s.pool.Close()
 	})

@@ -63,7 +63,7 @@ func TestReportsHandler_List_RendersTable(t *testing.T) {
 		},
 	}
 
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports", http.NoBody)
@@ -100,7 +100,7 @@ func TestReportsHandler_List_EmptyState(t *testing.T) {
 		},
 	}
 
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports", http.NoBody)
@@ -129,7 +129,7 @@ func TestReportsHandler_List_HTMXPaginationFragment(t *testing.T) {
 		},
 	}
 
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports?page=2", http.NoBody)
@@ -154,7 +154,7 @@ func TestReportsHandler_List_ServiceError(t *testing.T) {
 	tenantID := domain.TenantID("t_test")
 
 	svc := &mockReportService{err: assert.AnError}
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports", http.NoBody)
@@ -189,7 +189,7 @@ func TestReportsHandler_Detail_RendersContentAndCitations(t *testing.T) {
 		},
 	}
 
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/"+id.String(), http.NoBody)
@@ -215,7 +215,7 @@ func TestReportsHandler_Detail_RendersContentAndCitations(t *testing.T) {
 
 func TestReportsHandler_Detail_InvalidID(t *testing.T) {
 	tenantID := domain.TenantID("t_test")
-	handler := NewReportsHandler(&mockReportService{}, &mockJobQueue{})
+	handler := NewReportsHandler(&mockReportService{}, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/bad", http.NoBody)
@@ -238,7 +238,7 @@ func TestReportsHandler_Detail_NotFound(t *testing.T) {
 	id := uuid.New()
 
 	svc := &mockReportService{detailErr: reports.ErrReportNotFound}
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/"+id.String(), http.NoBody)
@@ -270,7 +270,7 @@ func TestReportsHandler_Detail_CrossTenantDenied(t *testing.T) {
 			Type:     "daily",
 		},
 	}
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/"+id.String(), http.NoBody)
@@ -312,7 +312,7 @@ func postGenerateRequest(t *testing.T, body string, htmx bool) (echo.Context, *h
 
 func TestReportsHandler_Generate_Success_HTMX(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, rec := postGenerateRequest(t, "report_type=on_demand&focus=Growth", true)
 	err := handler.Generate(c)
@@ -336,7 +336,7 @@ func TestReportsHandler_Generate_Success_HTMX(t *testing.T) {
 
 func TestReportsHandler_Generate_WeeklyWithSchedule(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	scheduleID := uuid.New().String()
 	body := "report_type=weekly&schedule_id=" + scheduleID
@@ -353,7 +353,7 @@ func TestReportsHandler_Generate_WeeklyWithSchedule(t *testing.T) {
 
 func TestReportsHandler_Generate_DefaultsToOnDemand(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, _ := postGenerateRequest(t, "", true)
 	err := handler.Generate(c)
@@ -366,7 +366,7 @@ func TestReportsHandler_Generate_DefaultsToOnDemand(t *testing.T) {
 
 func TestReportsHandler_Generate_InvalidScheduleID(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, rec := postGenerateRequest(t, "schedule_id=not-a-uuid", true)
 	err := handler.Generate(c)
@@ -378,7 +378,7 @@ func TestReportsHandler_Generate_InvalidScheduleID(t *testing.T) {
 
 func TestReportsHandler_Generate_InvalidReportType(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, rec := postGenerateRequest(t, "report_type=bogus", true)
 	err := handler.Generate(c)
@@ -389,7 +389,7 @@ func TestReportsHandler_Generate_InvalidReportType(t *testing.T) {
 
 func TestReportsHandler_Generate_EnqueueError(t *testing.T) {
 	q := &mockJobQueue{err: assert.AnError}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, rec := postGenerateRequest(t, "report_type=daily", true)
 	err := handler.Generate(c)
@@ -399,7 +399,7 @@ func TestReportsHandler_Generate_EnqueueError(t *testing.T) {
 
 func TestReportsHandler_Generate_NonHTMXRedirect(t *testing.T) {
 	q := &mockJobQueue{}
-	handler := NewReportsHandler(&mockReportService{}, q)
+	handler := NewReportsHandler(&mockReportService{}, q, nil)
 
 	c, rec := postGenerateRequest(t, "report_type=daily", false)
 	err := handler.Generate(c)
@@ -422,7 +422,7 @@ func TestReportsHandler_List_RendersGenerateControls(t *testing.T) {
 			PageSize:   20,
 		},
 	}
-	handler := NewReportsHandler(svc, &mockJobQueue{})
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports", http.NoBody)
@@ -451,4 +451,183 @@ func TestReportsHandler_List_RendersGenerateControls(t *testing.T) {
 	assert.Contains(t, body, "gen-submit-spinner")
 	// HTMX polling refreshes the report list on page one.
 	assert.Contains(t, body, `hx-trigger="every 10s"`)
+}
+
+// --- Generation job tracking & activity tests ---
+
+func TestReportsHandler_Generate_TracksJob(t *testing.T) {
+	q := &mockJobQueue{}
+	svc := &mockReportService{}
+	handler := NewReportsHandler(svc, q, nil)
+
+	c, _ := postGenerateRequest(t, "report_type=on_demand&focus=Growth", true)
+	err := handler.Generate(c)
+	require.NoError(t, err)
+
+	// The enqueued task ID is retained on the tracking record.
+	assert.Equal(t, "job-1", svc.trackedTaskID)
+}
+
+func TestReportsHandler_Generate_TrackingErrorStillSucceeds(t *testing.T) {
+	q := &mockJobQueue{}
+	svc := &mockReportService{trackErr: assert.AnError}
+	handler := NewReportsHandler(svc, q, nil)
+
+	c, rec := postGenerateRequest(t, "report_type=on_demand", true)
+	err := handler.Generate(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Report generation started")
+}
+
+func TestReportsHandler_List_RendersActivityPanel(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	svc := &mockReportService{
+		page: reports.ReportPage{
+			Reports:    []reports.StoredReport{{ID: uuid.New(), Title: "Daily Brief", Type: "daily", GeneratedAt: time.Now()}},
+			TotalCount: 1,
+			Page:       1,
+			PageSize:   20,
+		},
+		jobs: []reports.GenerationJob{
+			{ID: uuid.New(), TenantID: "t_test", TaskID: "task-1", ReportType: "on_demand", Focus: "Growth", Status: reports.GenerationJobQueued, EnqueuedAt: time.Now().Add(-time.Minute)},
+			{ID: uuid.New(), TenantID: "t_test", TaskID: "task-2", ReportType: "weekly", Status: reports.GenerationJobFailed, Error: "llm timeout", EnqueuedAt: time.Now().Add(-time.Hour)},
+		},
+	}
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports", http.NoBody)
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.List(c)
+	require.NoError(t, err)
+	body := rec.Body.String()
+
+	assert.Contains(t, body, "Recent Activity")
+	assert.Contains(t, body, "Queued")
+	assert.Contains(t, body, "On Demand")
+	assert.Contains(t, body, "Failed")
+	// Failed jobs surface their error message.
+	assert.Contains(t, body, "llm timeout")
+	// The activity panel polls the fragment endpoint.
+	assert.Contains(t, body, `hx-get="/reports/activity"`)
+	assert.Contains(t, body, `hx-trigger="every 10s`)
+}
+
+func TestReportsHandler_Activity_LiveStateOverridesDB(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	svc := &mockReportService{
+		jobs: []reports.GenerationJob{
+			{ID: uuid.New(), TenantID: "t_test", TaskID: "task-1", ReportType: "on_demand", Status: reports.GenerationJobQueued, EnqueuedAt: time.Now()},
+		},
+	}
+	insp := &mockJobInspector{states: map[string]queue.JobState{
+		"task-1": {ID: "task-1", Status: queue.JobRunning},
+	}}
+	handler := NewReportsHandler(svc, &mockJobQueue{}, insp)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/activity", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Activity(c)
+	require.NoError(t, err)
+	body := rec.Body.String()
+
+	// Live queue state wins over the recorded DB status.
+	assert.Contains(t, body, "Running")
+	assert.NotContains(t, body, "Queued")
+	// Fragment only — no page shell.
+	assert.NotContains(t, body, "<html")
+}
+
+func TestReportsHandler_Activity_FailedJobShowsError(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	svc := &mockReportService{
+		jobs: []reports.GenerationJob{
+			{ID: uuid.New(), TenantID: "t_test", TaskID: "task-1", ReportType: "monthly", Status: reports.GenerationJobQueued, EnqueuedAt: time.Now()},
+		},
+	}
+	insp := &mockJobInspector{states: map[string]queue.JobState{
+		"task-1": {ID: "task-1", Status: queue.JobFailed, Error: "archived: llm quota exceeded"},
+	}}
+	handler := NewReportsHandler(svc, &mockJobQueue{}, insp)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/activity", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Activity(c)
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "archived: llm quota exceeded")
+}
+
+func TestReportsHandler_Activity_InspectorErrorFallsBackToDB(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	svc := &mockReportService{
+		jobs: []reports.GenerationJob{
+			{ID: uuid.New(), TenantID: "t_test", TaskID: "task-1", ReportType: "daily", Status: reports.GenerationJobSucceeded, EnqueuedAt: time.Now()},
+		},
+	}
+	// Inspector unavailable — the recorded DB outcome is shown.
+	handler := NewReportsHandler(svc, &mockJobQueue{}, &mockJobInspector{err: assert.AnError})
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/activity", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Activity(c)
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "Succeeded")
+}
+
+func TestReportsHandler_Activity_Empty(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	handler := NewReportsHandler(&mockReportService{}, &mockJobQueue{}, nil)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/activity", http.NoBody)
+	req.Header.Set("HX-Request", "true")
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Activity(c)
+	require.NoError(t, err)
+	assert.Contains(t, rec.Body.String(), "No generation activity yet")
+}
+
+func TestReportsHandler_Activity_ServiceError(t *testing.T) {
+	tenantID := domain.TenantID("t_test")
+	svc := &mockReportService{jobsErr: assert.AnError}
+	handler := NewReportsHandler(svc, &mockJobQueue{}, nil)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/reports/activity", http.NoBody)
+	ctx := auth.SetTenantID(req.Context(), tenantID)
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := handler.Activity(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "No generation activity yet")
 }

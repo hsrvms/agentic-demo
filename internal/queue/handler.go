@@ -109,6 +109,11 @@ func (h *ReportHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 		defer h.rateLimiter.Release(ctx, payload.TenantID)
 	}
 
+	// Track lifecycle transitions for jobs the web UI enqueued. Scheduled
+	// jobs have no tracking row, so these updates are no-ops for them.
+	taskID, _ := asynq.GetTaskID(ctx)
+	h.trackJob(ctx, taskID, reports.GenerationJobRunning, "")
+
 	config := domain.ReportConfig{
 		Type:           domain.ReportType(payload.ReportType),
 		FocusAreas:     payload.FocusAreas,
@@ -117,6 +122,7 @@ func (h *ReportHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 
 	generated, err := h.worker.GenerateReport(ctx, domain.TenantID(payload.TenantID), config)
 	if err != nil {
+		h.trackJob(ctx, taskID, reports.GenerationJobFailed, err.Error())
 		return fmt.Errorf("generate report for %s: %w", payload.TenantID, err)
 	}
 
@@ -141,6 +147,7 @@ func (h *ReportHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 			GeneratedAt: generated.Date,
 		})
 		if err != nil {
+			h.trackJob(ctx, taskID, reports.GenerationJobFailed, err.Error())
 			return fmt.Errorf("persist report for %s: %w", payload.TenantID, err)
 		}
 
@@ -170,10 +177,39 @@ func (h *ReportHandler) ProcessTask(ctx context.Context, task *asynq.Task) error
 		}
 	}
 
+	h.trackJob(ctx, taskID, reports.GenerationJobSucceeded, "")
 	return nil
 }
 
-// reportTitle generates a human-readable title from the report type and date.
+// trackJob records a lifecycle transition for a tracked generation job. It
+// is best-effort: tracking failures are logged, never fatal to the task.
+func (h *ReportHandler) trackJob(ctx context.Context, taskID string, status reports.GenerationJobStatus, errMsg string) {
+	if taskID == "" || h.reportService == nil {
+		return
+	}
+
+	var err error
+	switch status {
+	case reports.GenerationJobRunning:
+		err = h.reportService.MarkGenerationJobRunning(ctx, taskID)
+	case reports.GenerationJobSucceeded:
+		err = h.reportService.MarkGenerationJobSucceeded(ctx, taskID)
+	case reports.GenerationJobFailed:
+		err = h.reportService.MarkGenerationJobFailed(ctx, taskID, errMsg)
+	}
+	if err != nil {
+		logger := h.logger
+		if logger == nil {
+			logger = slog.Default()
+		}
+		logger.Warn("mark generation job status",
+			"task_id", taskID,
+			"status", status,
+			"error", err,
+		)
+	}
+}
+
 func reportTitle(reportType string, date time.Time) string {
 	label := titleCase(reportType)
 	return fmt.Sprintf("%s Report — %s", label, date.Format("Jan 02, 2006"))

@@ -110,6 +110,25 @@ type ReportListData struct {
 	NextPage   int
 }
 
+// GenerationActivityItem is a single row in the recent generation activity
+// panel on the reports page.
+type GenerationActivityItem struct {
+	ID           string
+	TypeLabel    string
+	TypeIntent   string // "info", "primary", "warning"
+	Status       string // "queued" | "running" | "succeeded" | "failed" | "unknown"
+	StatusLabel  string
+	StatusIntent string // "info", "success", "error", "muted"
+	Error        string
+	Focus        string
+	EnqueuedAt   string
+}
+
+// GenerationActivityData is the view model for the generation activity panel.
+type GenerationActivityData struct {
+	Items []GenerationActivityItem
+}
+
 // Citation is a single source reference attached to a generated report.
 type Citation struct {
 	Title  string
